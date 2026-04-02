@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  =========================================================
+  Mac 자동 실행 설정 파일 (launchd plist)
+  00:00 시작, 6시간 마다 자동 실행 (00:00 / 06:00 / 12:00 / 18:00)
+
+  ★ 설치:  bash install-scheduler.sh
+  ★ 즉시 실행: launchctl start com.irichgreen.ytsummarizer
+  ★ 제거: launchctl unload ~/Library/LaunchAgents/com.irichgreen.ytsummarizer.plist
+  =========================================================
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.irichgreen.ytsummarizer</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <string>/Users/사용자명/youtube-notion-app/scheduler.js</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/사용자명/youtube-notion-app</string>
+
+  <!-- 00:00 시작, 6시간 간격: 00:00 / 06:00 / 12:00 / 18:00 -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict>
+      <key>Hour</key><integer>0</integer>
+      <key>Minute</key><integer>0</integer>
+    </dict>
+    <dict>
+      <key>Hour</key><integer>6</integer>
+      <key>Minute</key><integer>0</integer>
+    </dict>
+    <dict>
+      <key>Hour</key><integer>12</integer>
+      <key>Minute</key><integer>0</integer>
+    </dict>
+    <dict>
+      <key>Hour</key><integer>18</integer>
+      <key>Minute</key><integer>0</integer>
+    </dict>
+  </array>
+
+  <key>StandardOutPath</key>
+  <string>/Users/사용자명/youtube-notion-app/scheduler-stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/사용자명/youtube-notion-app/scheduler-stderr.log</string>
+
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>

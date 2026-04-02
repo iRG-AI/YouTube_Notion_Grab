@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  =========================================================
+  Mac 로그인 시 server.js 자동 시작 설정 (launchd plist)
+
+  ★ 설치 (터미널에서 한 번만 실행):
+     bash install-server.sh
+
+  ★ 수동 시작:
+     launchctl start com.irichgreen.server
+
+  ★ 중지:
+     launchctl stop com.irichgreen.server
+
+  ★ 제거:
+     launchctl unload ~/Library/LaunchAgents/com.irichgreen.server.plist
+
+  ★ 로그 확인:
+     tail -f ~/Documents/Claude/Youtube_Notion_Grap/server.log
+  =========================================================
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.irichgreen.server</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/node</string>
+    <!-- ★ install-server.sh 가 자동으로 실제 경로로 치환합니다 ★ -->
+    <string>/Users/사용자명/youtube-notion-app/server.js</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/사용자명/youtube-notion-app</string>
+
+  <!-- 로그인 시 자동 시작 -->
+  <key>RunAtLoad</key>
+  <true/>
+
+  <!-- 비정상 종료 시 자동 재시작 -->
+  <key>KeepAlive</key>
+  <true/>
+
+  <!-- 로그 출력 -->
+  <key>StandardOutPath</key>
+  <string>/Users/사용자명/youtube-notion-app/server.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/사용자명/youtube-notion-app/server-error.log</string>
+</dict>
+</plist>

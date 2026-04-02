@@ -1,0 +1,14 @@
+# 로그 파일
+*.log
+
+# 개인 재생목록 (개인정보 포함)
+playlists.json
+
+# macOS
+.DS_Store
+
+# Node.js
+node_modules/
+
+# 환경변수 (API 키 등)
+.env
