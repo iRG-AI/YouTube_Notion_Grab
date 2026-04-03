@@ -1,33 +1,46 @@
 // ===== YouTube → Notion AI 요약기 자동 스케줄러 =====
-// Mac launchd에 의해 매일 00:30에 자동 실행됩니다.
+// Mac launchd에 의해 6시간 간격으로 자동 실행됩니다.
 // 직접 실행: node scheduler.js
-//
-// ★ 아래 설정값을 반드시 채워주세요 ★
 
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
 // ══════════════════════════════════
-// ★ 설정값 (여기만 수정하면 됩니다) ★
+// ★ .env 파일에서 환경변수 로드 ★
 // ══════════════════════════════════
-const CONFIG = {
-  youtubeApiKey:  'YOUR_YOUTUBE_API_KEY',   // YouTube Data API v3 키
-  geminiApiKey:   'YOUR_GEMINI_API_KEY',    // Gemini API 키
-  notionToken:    'YOUR_NOTION_TOKEN',      // Notion Integration 토큰
-  notionDbId:     'YOUR_NOTION_DB_ID',      // Notion DB ID
+function loadEnv() {
+  const envPath = path.join(__dirname, '.env');
+  if (!fs.existsSync(envPath)) return;
+  const lines = fs.readFileSync(envPath, 'utf8').split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx < 0) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    const val = trimmed.slice(eqIdx + 1).trim();
+    if (key && !process.env[key]) process.env[key] = val;
+  }
+}
+loadEnv();
 
-  // ── 알림 설정 (사용할 방법만 채워주세요) ──
+const CONFIG = {
+  youtubeApiKey:  process.env.YOUTUBE_API_KEY  || '',
+  geminiApiKey:   process.env.GEMINI_API_KEY   || '',
+  notionToken:    process.env.NOTION_TOKEN      || '',
+  notionDbId:     process.env.NOTION_DB_ID      || '',
+
   telegram: {
-    enabled:  true,
-    botToken: 'YOUR_TELEGRAM_BOT_TOKEN',
-    chatId:   'YOUR_TELEGRAM_CHAT_ID',
+    enabled:  process.env.TELEGRAM_ENABLED === 'true',
+    botToken: process.env.TELEGRAM_BOT_TOKEN || '',
+    chatId:   process.env.TELEGRAM_CHAT_ID   || '',
   },
   email: {
-    enabled:  false,                 // true로 바꾸면 이메일 알림 활성화
-    from:     'your@gmail.com',      // 발신 Gmail 주소
-    to:       'your@email.com',      // 수신 이메일 주소
-    appPass:  'xxxx xxxx xxxx xxxx', // Gmail 앱 비밀번호 (16자리)
+    enabled:  process.env.EMAIL_ENABLED === 'true',
+    from:     process.env.EMAIL_FROM     || '',
+    to:       process.env.EMAIL_TO       || '',
+    appPass:  process.env.EMAIL_APP_PASS || '',
   },
 };
 // ══════════════════════════════════
