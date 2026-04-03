@@ -740,15 +740,31 @@
     }));
   }
 
-  function load() {
+  async function load() {
+    // ── 1. 서버 .env에서 설정값 자동 로드 ──
+    try {
+      const res = await fetch('/api/config');
+      if (res.ok) {
+        const cfg = await res.json();
+        if (cfg.ytKey)   { $('ytKey').value   = cfg.ytKey;   }
+        if (cfg.gmKey)   { $('gmKey').value   = cfg.gmKey;   }
+        if (cfg.ntToken) { $('ntToken').value = cfg.ntToken; }
+        if (cfg.ntDb)    { $('ntDb').value    = cfg.ntDb;    }
+        if (cfg.telegram?.botToken) { $('tgToken').value  = cfg.telegram.botToken; }
+        if (cfg.telegram?.chatId)   { $('tgChatId').value = cfg.telegram.chatId;   }
+        if (cfg.telegram?.enabled)  { $('tgEnabled').checked = true; }
+      }
+    } catch(e) {}
+    // ── 2. localStorage에 저장된 값으로 보완 (서버값 우선) ──
     const s = JSON.parse(localStorage.getItem('yt2notion') || '{}');
-    $('ytKey').value    = s.ytKey   || '';
-    $('gmKey').value    = s.gmKey   || '';
-    $('ntToken').value  = s.ntToken || '';
-    $('ntDb').value     = s.ntDb    || 'e234630943b040af88af1c428d54154f';
-    if (s.tgToken)    $('tgToken').value    = s.tgToken;
-    if (s.tgChatId)   $('tgChatId').value   = s.tgChatId;
-    if (s.tgEnabled)  $('tgEnabled').checked = true;
+    if (!$('ytKey').value   && s.ytKey)   $('ytKey').value   = s.ytKey;
+    if (!$('gmKey').value   && s.gmKey)   $('gmKey').value   = s.gmKey;
+    if (!$('ntToken').value && s.ntToken) $('ntToken').value = s.ntToken;
+    if (!$('ntDb').value    && s.ntDb)    $('ntDb').value    = s.ntDb;
+    if (!$('ntDb').value) $('ntDb').value = 'e234630943b040af88af1c428d54154f';
+    if (s.tgToken    && !$('tgToken').value)  $('tgToken').value    = s.tgToken;
+    if (s.tgChatId   && !$('tgChatId').value) $('tgChatId').value   = s.tgChatId;
+    if (s.tgEnabled)  $('tgEnabled').checked  = true;
     if (s.emailFrom)  $('emailFrom').value  = s.emailFrom;
     if (s.emailTo)    $('emailTo').value    = s.emailTo;
     if (s.emailPass)  $('emailPass').value  = s.emailPass;

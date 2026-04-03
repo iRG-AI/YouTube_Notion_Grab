@@ -5,9 +5,25 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
-// url 모듈 불필요 (WHATWG URL API 사용)
 
 const PORT = 3000;
+
+// ── .env 파일 로드 ──
+function loadEnv() {
+  const envPath = path.join(__dirname, '.env');
+  if (!fs.existsSync(envPath)) return;
+  const lines = fs.readFileSync(envPath, 'utf8').split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx < 0) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    const val = trimmed.slice(eqIdx + 1).trim();
+    if (key && !process.env[key]) process.env[key] = val;
+  }
+}
+loadEnv();
 
 // ── 허용할 출처 (localhost만 허용) ──
 const ALLOWED_ORIGINS = [
@@ -178,6 +194,23 @@ const server = http.createServer((req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, CORS);
     res.end();
+    return;
+  }
+
+  // ── API 설정값 제공 (웹앱 자동 로드용) ──
+  if (parsedUrl.pathname === '/api/config' && req.method === 'GET') {
+    res.writeHead(200, CORS);
+    res.end(JSON.stringify({
+      ytKey:   process.env.YOUTUBE_API_KEY  || '',
+      gmKey:   process.env.GEMINI_API_KEY   || '',
+      ntToken: process.env.NOTION_TOKEN     || '',
+      ntDb:    process.env.NOTION_DB_ID     || '',
+      telegram: {
+        enabled:  process.env.TELEGRAM_ENABLED === 'true',
+        botToken: process.env.TELEGRAM_BOT_TOKEN || '',
+        chatId:   process.env.TELEGRAM_CHAT_ID   || '',
+      },
+    }));
     return;
   }
 
