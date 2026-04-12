@@ -6,7 +6,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = 3000;
+const PORT = 3001;
 
 // ── .env 파일 로드 ──
 function loadEnv() {
@@ -27,8 +27,8 @@ loadEnv();
 
 // ── 허용할 출처 (localhost만 허용) ──
 const ALLOWED_ORIGINS = [
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
+  'http://localhost:3001',
+  'http://127.0.0.1:3001',
 ];
 
 // ── 허용된 Notion API 경로 패턴 (화이트리스트) ──
