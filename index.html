@@ -1775,7 +1775,7 @@
       if (!doStop) {
         const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
         const lines = plResults.map(r =>
-          `• [${r.name}] 저장: ${r.saved}개 / Skip: ${r.skip}개 / 오류: ${r.error}개`
+          `• ${r.name}: 저장 ${r.saved} / 스킵 ${r.skip} / 오류 ${r.error}`
         ).join('\n');
         const msg = [
           `🎬 YouTube → Notion 요약 완료`,
@@ -1784,7 +1784,7 @@
           ``,
           lines,
           ``,
-          `📊 전체: 저장 ${totalSaved}개 / Skip ${totalSkip}개 / 오류 ${totalError}개`,
+          `📊 합계: 저장 ${totalSaved} / 스킵 ${totalSkip} / 오류 ${totalError}`,
         ].join('\n');
         await sendTelegram(msg);
         await sendEmail(`[YouTube 요약] 완료 - 저장 ${totalSaved}개`, msg);
