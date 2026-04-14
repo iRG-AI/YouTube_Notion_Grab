@@ -708,7 +708,7 @@ async function main() {
   // ── 전체 완료 알림 전송 ──
   const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
   const summaryLines = results.map(r =>
-    `• ${r.name}: 저장 ${fmtNum(r.saved)} / 스킵 ${fmtNum(r.skip)} / 오류 ${fmtNum(r.error)}`
+    `• ${r.name}: 저장 ${fmtNum(r.saved)}/ 스킵 ${fmtNum(r.skip)}/ 오류 ${fmtNum(r.error)}`
   ).join('\n');
   const elapsed = formatElapsed(Date.now() - startTime);
   const msg = [
@@ -718,7 +718,7 @@ async function main() {
     ``,
     summaryLines,
     ``,
-    `📊 합계: 저장 ${fmtNum(totalSaved)} / 스킵 ${fmtNum(totalSkip)} / 오류 ${fmtNum(totalError)}`,
+    `📊 합계: 저장 ${fmtNum(totalSaved)}/ 스킵 ${fmtNum(totalSkip)}/ 오류 ${fmtNum(totalError)}`,
   ].join('\n');
 
   await sendTelegram(msg);
