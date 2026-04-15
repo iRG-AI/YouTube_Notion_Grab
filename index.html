@@ -1270,14 +1270,15 @@
   }
 
   // ===== 재생목록 하나 처리 (최적화: 배치조회 + Notion캐시 + 딜레이 단축) =====
-  async function processPlaylist(plUrl, ytKey, gmKey, ntToken, ntDb, notionCache, sessionCache = new Map()) {
+  async function processPlaylist(plUrl, ytKey, gmKey, ntToken, ntDb, notionCache, sessionCache = new Map(), plName = '') {
     const pid = listId(plUrl);
     if (!pid) { log(`올바르지 않은 URL: ${plUrl}`, 'error'); return; }
 
     log(`▶ 재생목록 조회 중... (ID: ${pid})`, 'info');
     prog(0, 1, '재생목록 불러오는 중...');
 
-    const playlistTitle = await getPlaylistTitle(pid, ytKey);
+    // playlists.json의 name 사용 (이모지 깨짐 방지), 없으면 YouTube API 제목 사용
+    const playlistTitle = plName || await getPlaylistTitle(pid, ytKey);
     log(`✓ 재생목록: "${playlistTitle}"`, 'success');
 
     const videos = await getVideos(pid, ytKey);
@@ -1761,7 +1762,7 @@
         const chName = $('progChannelName');
         chEl.style.display = 'block';
         chName.textContent = `${pl.name}`;
-        const result = await processPlaylist(pl.url, ytKey, gmKey, ntToken, ntDb, notionCache, sessionCache);
+        const result = await processPlaylist(pl.url, ytKey, gmKey, ntToken, ntDb, notionCache, sessionCache, pl.name);
         if (result) plResults.push(result);
       }
       const totalSaved = plResults.reduce((s,r) => s + r.saved, 0);

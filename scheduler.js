@@ -505,7 +505,8 @@ async function processPlaylist(pl, notionCache) {
   const listId = m[1];
 
   log(`\n▶ [${pl.name}] 재생목록 조회 중...`);
-  const playlistTitle = await getPlaylistTitle(listId);
+  // YouTube API 제목 대신 playlists.json의 name 사용 (이모지 깨짐 방지)
+  const playlistTitle = pl.name;
   log(`  재생목록명: "${playlistTitle}"`);
 
   const videos = await getVideos(listId);
