@@ -319,7 +319,7 @@ async function notionCall(method, apiPath, body) {
 
 // ── Notion DB 전체 캐시 로드 (재생목록 처리 전 1회만 호출) ──
 async function loadNotionCache() {
-  const cache = new Map(); // title → { pageId, topics, savedViewCount, savedSubscribers, savedDate }
+  const cache = new Map(); // videoId → { pageId, title, topics, savedViewCount, savedSubscribers, savedDate }
   let cursor = undefined;
   let total = 0;
   log('  📦 Notion DB 캐시 로딩 중...');
@@ -330,12 +330,17 @@ async function loadNotionCache() {
     if (res.status !== 200) break;
     for (const page of (res.data?.results || [])) {
       const props = page.properties || {};
-      const title = (props['영상 제목']?.title || []).map(t => t.text?.content || '').join(''); // 전체 rich_text 조각 합산
-      if (!title) continue;
-      // 같은 제목이 이미 있으면 덮어씌우지 않음 (먼저 저장된 것 우선)
-      if (!cache.has(title)) {
-        cache.set(title, {
+      const title = (props['영상 제목']?.title || []).map(t => t.text?.content || '').join('');
+      const videoUrl = props['영상 URL']?.url || '';
+      // URL에서 videoId 추출
+      const vidMatch = videoUrl.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+      const videoId = vidMatch ? vidMatch[1] : '';
+      if (!videoId && !title) continue;
+      const key = videoId || title; // videoId 우선, 없으면 title
+      if (!cache.has(key)) {
+        cache.set(key, {
           pageId:           page.id,
+          title:            title,
           topics:           (props['주제']?.multi_select || []).map(t => t.name),
           savedViewCount:   props['조회수']?.number ?? null,
           savedSubscribers: props['구독자수']?.number ?? null,
@@ -350,9 +355,11 @@ async function loadNotionCache() {
   return cache;
 }
 
-// ── 중복 체크 (캐시에서 조회) ──
-function findDuplicate(title, cache) {
-  return cache.get(title) || null;
+// ── 중복 체크 (videoId 우선, 없으면 title로 fallback) ──
+function findDuplicate(video, cache) {
+  if (video.videoId && cache.has(video.videoId)) return cache.get(video.videoId);
+  if (video.title && cache.has(video.title)) return cache.get(video.title);
+  return null;
 }
 
 // ── 기존 페이지에 주제(재생목록) 추가 ──
@@ -542,7 +549,7 @@ async function processPlaylist(pl, notionCache) {
     v.subscriberCount = chCache[v.channelId] || 0;
 
     log(`  [${i+1}/${videos.length}] ${v.title}`);
-    const dup = findDuplicate(v.title, notionCache);
+    const dup = findDuplicate(v, notionCache);
     if (dup) {
       // ← API 호출 전에 미리 체크 (불필요한 Notion API 호출 차단)
       const needTopicAdd = !dup.topics.includes(playlistTitle);
@@ -600,8 +607,9 @@ async function processPlaylist(pl, notionCache) {
         const summary = res.value;
         log('    ✓ 요약 완료 (' + summary.length + '자): ' + v.title.slice(0,30));
         await saveToNotion(v, summary, playlistTitle);
-        notionCache.set(v.title, {
-          pageId: 'new', topics: [playlistTitle],
+        const cacheKey = v.videoId || v.title;
+        notionCache.set(cacheKey, {
+          pageId: 'new', title: v.title, topics: [playlistTitle],
           savedViewCount: v.viewCount, savedSubscribers: v.subscriberCount,
           savedDate: v.publishedAt?.split('T')[0] || null,
         });

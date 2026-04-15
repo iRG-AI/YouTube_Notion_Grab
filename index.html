@@ -988,14 +988,21 @@
       for (const page of (d.results || [])) {
         const props = page.properties || {};
         const title = props['영상 제목']?.title?.[0]?.text?.content || '';
-        if (!title) continue;
-        cache.set(title, {
-          pageId:           page.id,
-          topics:           (props['주제']?.multi_select || []).map(t => t.name),
-          savedViewCount:   props['조회수']?.number ?? null,
-          savedSubscribers: props['구독자수']?.number ?? null,
-          savedDate:        props['업로드 일자']?.date?.start ?? null,
-        });
+        const videoUrl = props['영상 URL']?.url || '';
+        const vidMatch = videoUrl.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+        const videoId = vidMatch ? vidMatch[1] : '';
+        const key = videoId || title;
+        if (!key) continue;
+        if (!cache.has(key)) {
+          cache.set(key, {
+            pageId:           page.id,
+            title:            title,
+            topics:           (props['주제']?.multi_select || []).map(t => t.name),
+            savedViewCount:   props['조회수']?.number ?? null,
+            savedSubscribers: props['구독자수']?.number ?? null,
+            savedDate:        props['업로드 일자']?.date?.start ?? null,
+          });
+        }
       }
       total += d.results?.length || 0;
       cursor = d.next_cursor;
@@ -1323,16 +1330,17 @@
         }
         v.subscriberCount = chCache[v.channelId] || 0;
 
-        // ── ② 세션 캐시 먼저 확인 ──
-        if (sessionCache.has(v.title)) {
+        // ── ② 세션 캐시 먼저 확인 (videoId 우선, title fallback) ──
+        const sessionKey = v.videoId || v.title;
+        if (sessionCache.has(sessionKey)) {
           log('  → ⏭ 세션 중복 — Skip', 'warn');
           addRow(v, '-', 'skip', []);
           plSkip++;
           continue;
         }
 
-        // ── ② Notion 캐시에서 중복 체크 (API 호출 없음) ──
-        const dup = notionCache.get(v.title);
+        // ── ③ Notion 캐시에서 중복 체크 (videoId 우선, title fallback) ──
+        const dup = notionCache.get(v.videoId) || notionCache.get(v.title);
         if (dup) {
           // ← API 호출 전에 미리 체크 (불필요한 Notion API 호출 차단)
           const needTopicAdd = !dup.topics.includes(playlistTitle);
@@ -1382,10 +1390,11 @@
 
         log('  → Notion에 저장 중...', 'info');
         await saveNotion(v, summary, ntToken, ntDb, playlistTitle);
-        // 캐시에 등록 (재중복 방지)
-        sessionCache.set(v.title, true);
-        notionCache.set(v.title, {
-          pageId: 'new', topics: [playlistTitle],
+        // 캐시에 등록 (videoId 우선, title fallback)
+        const cacheKey = v.videoId || v.title;
+        sessionCache.set(cacheKey, true);
+        notionCache.set(cacheKey, {
+          pageId: 'new', title: v.title, topics: [playlistTitle],
           savedViewCount: v.viewCount, savedSubscribers: v.subscriberCount,
           savedDate: v.publishedAt?.split('T')[0] || null,
         });
