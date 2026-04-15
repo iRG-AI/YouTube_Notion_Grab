@@ -724,6 +724,18 @@ async function main() {
 
   await sendTelegram(msg);
   await sendEmail(`[YouTube 요약] 완료 - 저장 ${totalSaved}개`, msg);
+
+  // ── Obsidian 동기화 (신규 저장이 있을 때만 실행) ──
+  if (totalSaved > 0) {
+    log('\n🔄 Obsidian 동기화 시작...');
+    const { execFile } = require('child_process');
+    const python3 = '/opt/homebrew/bin/python3';
+    const syncScript = path.join(__dirname, 'sync_obsidian.py');
+    execFile(python3, [syncScript], { cwd: __dirname }, (err, stdout, stderr) => {
+      if (err) log(`❌ Obsidian 동기화 오류: ${err.message}`);
+      else log(`✅ Obsidian 동기화 완료!\n${stdout}`);
+    });
+  }
 }
 
 main().catch(e => {

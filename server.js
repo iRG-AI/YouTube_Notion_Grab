@@ -214,6 +214,19 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ── Obsidian 동기화 트리거 ──
+  if (parsedUrl.pathname === '/api/sync-obsidian' && req.method === 'POST') {
+    res.writeHead(200, CORS);
+    res.end(JSON.stringify({ ok: true, message: 'Obsidian 동기화 시작' }));
+    const { execFile } = require('child_process');
+    const python3 = '/opt/homebrew/bin/python3';
+    const syncScript = require('path').join(__dirname, 'sync_obsidian.py');
+    execFile(python3, [syncScript], { cwd: __dirname }, (err, stdout, stderr) => {
+      console.log(err ? `❌ Obsidian 동기화 오류: ${err.message}` : `✅ Obsidian 동기화 완료`);
+    });
+    return;
+  }
+
   // ── HTML 서빙 ──
   if (parsedUrl.pathname === '/' || parsedUrl.pathname === '/index.html') {
     fs.readFile(path.join(__dirname, 'index.html'), (err, data) => {

@@ -1789,6 +1789,17 @@
         ].join('\n');
         await sendTelegram(msg);
         await sendEmail(`[YouTube 요약] 완료 - 저장 ${totalSaved}개`, msg);
+
+        // ── 신규 저장이 있을 때 Obsidian 동기화 트리거 ──
+        if (totalSaved > 0) {
+          log('🔄 Obsidian 동기화 시작...', 'info');
+          try {
+            const syncRes = await fetch('/api/sync-obsidian', { method: 'POST' });
+            if (syncRes.ok) log('✅ Obsidian 동기화 요청 완료 (백그라운드 실행 중)', 'success');
+          } catch(e) {
+            log(`⚠️ Obsidian 동기화 요청 실패: ${e.message}`, 'warn');
+          }
+        }
       }
     } catch(e) {
       log(`❌ 오류: ${e.message}`, 'error');
