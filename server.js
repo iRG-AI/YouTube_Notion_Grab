@@ -221,8 +221,31 @@ const server = http.createServer((req, res) => {
     const { execFile } = require('child_process');
     const python3 = '/opt/homebrew/bin/python3';
     const syncScript = require('path').join(__dirname, 'sync_obsidian.py');
-    execFile(python3, [syncScript], { cwd: __dirname }, (err, stdout, stderr) => {
-      console.log(err ? `❌ Obsidian 동기화 오류: ${err.message}` : `✅ Obsidian 동기화 완료`);
+    execFile(python3, [syncScript], { cwd: __dirname }, async (err, stdout) => {
+      if (err) {
+        console.log(`❌ Obsidian 동기화 오류: ${err.message}`);
+        return;
+      }
+      // RESULT_JSON 파싱 후 텔레그램 전송
+      const jsonLine = (stdout || '').split('\n').find(l => l.startsWith('RESULT_JSON:'));
+      if (jsonLine && process.env.TELEGRAM_ENABLED === 'true') {
+        try {
+          const r = JSON.parse(jsonLine.replace('RESULT_JSON:', ''));
+          const obsMsg = [
+            `📓 Obsidian AI LLM Wiki`,
+            `  • 신규 추가: ${r.added}개`,
+            `  • Wiki 재구성: ${r.rebuilt ? '✅ 완료' : '⏭ 생략'}`,
+            `  • 소요시간: ${r.elapsed}초`,
+          ].join('\n');
+          const text = encodeURIComponent(obsMsg);
+          const token = process.env.TELEGRAM_BOT_TOKEN;
+          const chatId = process.env.TELEGRAM_CHAT_ID;
+          require('https').get(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=${text}`);
+          console.log(`✅ Obsidian 동기화 완료 — 추가: ${r.added}개`);
+        } catch(e) {
+          console.log(`⚠️ Obsidian 결과 파싱 오류: ${e.message}`);
+        }
+      }
     });
     return;
   }

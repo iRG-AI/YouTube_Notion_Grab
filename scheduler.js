@@ -731,9 +731,31 @@ async function main() {
     const { execFile } = require('child_process');
     const python3 = '/opt/homebrew/bin/python3';
     const syncScript = path.join(__dirname, 'sync_obsidian.py');
-    execFile(python3, [syncScript], { cwd: __dirname }, (err, stdout, stderr) => {
-      if (err) log(`❌ Obsidian 동기화 오류: ${err.message}`);
-      else log(`✅ Obsidian 동기화 완료!\n${stdout}`);
+    execFile(python3, [syncScript], { cwd: __dirname }, async (err, stdout, stderr) => {
+      if (err) {
+        log(`❌ Obsidian 동기화 오류: ${err.message}`);
+        await sendTelegram(`⚠️ Obsidian 동기화 실패\n${err.message}`);
+        return;
+      }
+      // RESULT_JSON 파싱
+      const jsonLine = stdout.split('\n').find(l => l.startsWith('RESULT_JSON:'));
+      if (jsonLine) {
+        try {
+          const r = JSON.parse(jsonLine.replace('RESULT_JSON:', ''));
+          const obsMsg = [
+            ``,
+            `📓 Obsidian AI LLM Wiki`,
+            `  • 신규 추가: ${r.added}개`,
+            `  • Wiki 재구성: ${r.rebuilt ? '✅ 완료' : '⏭ 생략'}`,
+            `  • 소요시간: ${r.elapsed}초`,
+          ].join('\n');
+          log(`✅ Obsidian 동기화 완료! 추가: ${r.added}개`);
+          // 기존 텔레그램 메시지에 Obsidian 결과 추가 전송
+          await sendTelegram(obsMsg);
+        } catch(e) {
+          log(`⚠️ Obsidian 결과 파싱 오류: ${e.message}`);
+        }
+      }
     });
   }
 }

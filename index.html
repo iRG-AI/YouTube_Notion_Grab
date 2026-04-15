@@ -1795,7 +1795,11 @@
           log('🔄 Obsidian 동기화 시작...', 'info');
           try {
             const syncRes = await fetch('/api/sync-obsidian', { method: 'POST' });
-            if (syncRes.ok) log('✅ Obsidian 동기화 요청 완료 (백그라운드 실행 중)', 'success');
+            const syncData = await syncRes.json();
+            if (syncRes.ok) {
+              log('✅ Obsidian 동기화 요청 완료 (백그라운드 실행 중)', 'success');
+              // 동기화 완료 후 결과 텔레그램 전송은 서버(scheduler.js)에서 처리
+            }
           } catch(e) {
             log(`⚠️ Obsidian 동기화 요청 실패: ${e.message}`, 'warn');
           }

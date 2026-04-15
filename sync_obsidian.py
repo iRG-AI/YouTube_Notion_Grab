@@ -183,13 +183,17 @@ def sync_new_pages():
 
 # ── 메인 실행 ──
 if __name__ == '__main__':
+    import time
     log('🚀 Obsidian 증분 동기화 시작\n')
+    start = time.time()
 
     # 1단계: 신규 파일 추가
     added = sync_new_pages()
 
     # 2단계: 신규 파일이 있거나 강제 재구성 옵션일 때 Wiki 재구성
     force = '--rebuild' in sys.argv
+    rebuilt = False
+    rebuild_err = ''
     if added > 0 or force:
         log('🔧 Wiki 재구성 중 (MOC + 키워드 링크)...')
         build_script = os.path.join(SCRIPT_DIR, 'build_obsidian_wiki.py')
@@ -197,12 +201,23 @@ if __name__ == '__main__':
             [sys.executable, build_script],
             capture_output=True, text=True
         )
-        log(result.stdout)
         if result.returncode != 0:
-            log(f'❌ Wiki 재구성 오류:\n{result.stderr}')
+            rebuild_err = result.stderr
+            log(f'❌ Wiki 재구성 오류:\n{rebuild_err}')
         else:
+            rebuilt = True
             log('✅ Wiki 재구성 완료!')
     else:
         log('ℹ️  신규 영상 없음 — Wiki 재구성 생략')
 
+    elapsed = round(time.time() - start)
     log('\n🎉 Obsidian 동기화 완료!')
+
+    # 결과를 JSON으로 출력 (scheduler.js에서 파싱)
+    import json
+    print('RESULT_JSON:' + json.dumps({
+        'added': added,
+        'rebuilt': rebuilt,
+        'elapsed': elapsed,
+        'error': rebuild_err,
+    }))
