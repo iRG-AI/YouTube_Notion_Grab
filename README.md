@@ -1,6 +1,7 @@
-# 🎬 YouTube → Notion AI 요약기
+# 🎬 YouTube → Notion AI 요약기 + Obsidian LLM Wiki
 
-YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하여 **Notion 데이터베이스**에 저장하는 풀스택 자동화 솔루션입니다.
+YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하여 **Notion DB**에 저장하고,  
+**Obsidian**으로 자동 동기화하여 **LLM Wiki** 지식베이스를 구축하는 풀스택 자동화 솔루션입니다.
 
 ---
 
@@ -20,34 +21,71 @@ YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하여 **Notion 
 - 🤖 **Gemini AI 자동 요약** — 영상 제목·설명·태그 기반 4섹션 보고서 자동 생성
 - 📝 **Notion DB 자동 저장** — 요약 결과를 Notion 데이터베이스에 구조화하여 저장
 - 🔄 **스마트 중복 방지** — Notion 전체 캐시 로드 후 메모리에서 즉시 중복 체크
-- 📊 **통계 자동 업데이트** — 조회수(10% 이상 변화 시), 구독자수, 업로드일 변경 감지
-- 📱 **텔레그램 알림** — 작업 완료 시 텔레그램 봇으로 결과 자동 전송
+- 📊 **통계 자동 업데이트** — 조회수(10% 이상 변화 시), 구독자수 변경 감지
+- 📓 **Obsidian 자동 동기화** — 신규 저장 완료 시 Obsidian LLM Wiki 자동 업데이트
+- 🔗 **Wiki 링크 자동 구성** — 재생목록별 MOC, 채널별 목차, 키워드 링크 자동 생성
+- 📱 **텔레그램 알림** — 노션 저장 결과 + Obsidian 동기화 결과 통합 전송
 - 📧 **이메일 알림** — Gmail SMTP를 통한 이메일 알림 (선택)
 - ⏰ **launchd 자동 스케줄링** — Mac 로그인 시 서버 자동 시작, 6시간 간격 스케줄러 실행
 
+
 ---
 
-## 🏗️ 아키텍처
+## 🏗️ 전체 파이프라인
+
+```
+YouTube 재생목록
+      ↓
+ 웹앱 / 스케줄러
+      ↓
+ Gemini AI 요약
+      ↓
+ Notion DB 저장
+      ↓  (신규 저장 > 0 이면 자동 실행)
+ sync_obsidian.py
+  ├── 신규 영상 .md 파일 생성
+  └── build_obsidian_wiki.py
+        ├── 재생목록별 MOC 재구성
+        ├── 채널별 목차 재구성
+        └── 키워드 링크 삽입
+      ↓
+ 텔레그램 결과 전송
+  ├── 노션 저장 결과
+  └── Obsidian 동기화 결과
+```
+
+---
+
+## 🏛️ 아키텍처
 
 ```
 ┌─────────────────────────────────────────────┐
 │              웹 앱 (index.html)              │
 │  체크박스 선택 → 선택된 재생목록만 실행       │
-│  Notion 전체 캐시 → 배치 조회 → 병렬 요약    │
+│  완료 후 → POST /api/sync-obsidian 자동 호출 │
 └──────────────┬──────────────────────────────┘
                │ localhost:3000
 ┌──────────────▼──────────────────────────────┐
 │           서버 (server.js)                   │
-│  Express + Notion API 프록시                 │
-│  로그인 시 자동 시작 (launchd KeepAlive)      │
+│  Notion API 프록시                           │
+│  /api/config  → .env 키 자동 로드            │
+│  /api/sync-obsidian → Python 동기화 트리거   │
+│  로그인 시 자동 시작 (launchd KeepAlive)     │
 └──────────────┬──────────────────────────────┘
                │
 ┌──────────────▼──────────────────────────────┐
 │         스케줄러 (scheduler.js)              │
 │  6시간 간격 자동 실행 (00/06/12/18시)         │
-│  전체 재생목록 순차 처리                      │
+│  완료 후 → sync_obsidian.py 자동 실행        │
+└──────────────┬──────────────────────────────┘
+               │
+┌──────────────▼──────────────────────────────┐
+│      Obsidian LLM Wiki (Python)             │
+│  sync_obsidian.py  → 신규 .md 증분 추가     │
+│  build_obsidian_wiki.py → MOC + 링크 재구성 │
 └─────────────────────────────────────────────┘
 ```
+
 
 ---
 
@@ -55,12 +93,13 @@ YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하여 **Notion 
 
 | 분류 | 기술 |
 |------|------|
-| **Runtime** | Node.js v25+ |
-| **Backend** | Express.js (Notion API 프록시 서버) |
+| **Runtime** | Node.js v25+, Python 3 |
+| **Backend** | Node.js HTTP 서버 (Notion API 프록시) |
 | **Frontend** | Vanilla HTML/CSS/JavaScript (Single File) |
 | **AI 요약** | Google Gemini 2.5 Flash API |
 | **데이터 소스** | YouTube Data API v3 |
 | **저장소** | Notion Database API |
+| **Wiki** | Obsidian (로컬 마크다운 지식베이스) |
 | **알림** | Telegram Bot API, Gmail SMTP |
 | **스케줄링** | macOS launchd |
 
@@ -70,31 +109,48 @@ YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하여 **Notion 
 
 ```
 Youtube_Notion_Grap/
-├── server.js                      # Express 웹 서버 + Notion API 프록시
-├── scheduler.js                   # 자동 스케줄러 (6시간 간격)
-├── index.html                     # 웹 앱 UI (단일 파일)
-├── package.json                   # Node.js CommonJS 설정
-├── playlists.json                 # 등록된 재생목록 목록
-├── favicon.svg                    # 브라우저 탭 아이콘
-├── com.irichgreen.server.plist    # launchd 서버 자동시작 설정
+├── server.js                          # 웹 서버 + Notion API 프록시 + Obsidian 트리거
+├── scheduler.js                       # 자동 스케줄러 (6시간 간격)
+├── index.html                         # 웹 앱 UI (단일 파일)
+├── package.json                       # Node.js CommonJS 설정
+├── playlists.json                     # 등록된 재생목록 목록
+├── .env                               # API 키 (gitignore — 절대 커밋 금지)
+├── favicon.svg                        # 브라우저 탭 아이콘
+├── notion_to_obsidian.js              # Notion → Obsidian 일회성 마이그레이션
+├── sync_obsidian.py                   # Obsidian 증분 동기화 (신규 영상만 추가)
+├── build_obsidian_wiki.py             # MOC + 채널 목차 + 키워드 링크 빌더
+├── com.irichgreen.server.plist        # launchd 서버 자동시작 설정
 ├── com.irichgreen.ytsummarizer.plist  # launchd 스케줄러 설정
-├── install-server.sh              # 서버 자동시작 설치 스크립트
-├── install-scheduler.sh           # 스케줄러 설치 스크립트
+├── install-server.sh                  # 서버 자동시작 설치 스크립트
+├── install-scheduler.sh               # 스케줄러 설치 스크립트
 └── README.md
 ```
 
 ---
 
-## ⚙️ 성능 최적화
+## 🔑 환경 변수 설정 (.env)
 
-- **YouTube 배치 조회**: 영상 50개씩 묶어서 API 호출 (1,200번 → 24번)
-- **Notion 전체 캐시**: 실행 시작 시 DB 전체 로드 → 메모리에서 중복 체크 (API 호출 0)
-- **채널 구독자 병렬 조회**: `Promise.all`로 채널별 동시 조회
-- **Gemini 병렬 요약**: 신규 영상 3개씩 동시 처리
-- **스마트 Skip**: 중복 영상은 딜레이 없이 즉시 처리
-- **조회수 스마트 업데이트**: 10% 이상 변화 시만 Notion API 호출
+프로젝트 루트에 `.env` 파일을 생성하세요. (GitHub에 절대 올리지 않습니다)
 
-> 1,200개 영상 기준: 기존 2시간 37분 → **약 3~5분**으로 단축
+```env
+YOUTUBE_API_KEY=AIzaSy...
+GEMINI_API_KEY=AIzaSy...
+NOTION_TOKEN=ntn_...
+NOTION_DB_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+
+TELEGRAM_ENABLED=true
+TELEGRAM_BOT_TOKEN=1234567890:AAG...
+TELEGRAM_CHAT_ID=1234567890
+
+EMAIL_ENABLED=false
+EMAIL_FROM=your@gmail.com
+EMAIL_TO=recipient@email.com
+EMAIL_APP_PASS=xxxx xxxx xxxx xxxx
+```
+
+> `.env` 파일을 저장하면 서버 재시작 시 자동으로 로드됩니다.  
+> 웹 앱도 서버의 `/api/config` 엔드포인트를 통해 키를 자동 수신합니다.
+
 
 ---
 
@@ -102,30 +158,15 @@ Youtube_Notion_Grap/
 
 ### 1. 사전 요구사항
 
-- Node.js v18 이상
+- Node.js v18 이상, Python 3
 - YouTube Data API v3 키
-- Google Gemini API 키
+- Google Gemini API 키 (이 프로젝트 전용 별도 키 권장)
 - Notion Integration 토큰 + 데이터베이스 ID
 - (선택) Telegram Bot Token + Chat ID
 
-### 2. 설정
+### 2. `.env` 파일 생성
 
-`scheduler.js` 상단의 CONFIG 값을 입력하세요:
-
-```javascript
-const CONFIG = {
-  youtubeApiKey:  'YOUR_YOUTUBE_API_KEY',
-  geminiApiKey:   'YOUR_GEMINI_API_KEY',
-  notionToken:    'YOUR_NOTION_TOKEN',
-  notionDbId:     'YOUR_NOTION_DB_ID',
-  telegram: {
-    enabled:  true,
-    botToken: 'YOUR_BOT_TOKEN',
-    chatId:   'YOUR_CHAT_ID',
-  },
-};
-```
-
+위 환경 변수 설정 섹션을 참조하여 `.env` 파일을 생성합니다.
 
 ### 3. 서버 실행 (수동)
 
@@ -138,11 +179,8 @@ node server.js
 ### 4. Mac 로그인 시 자동 시작 설치 (최초 1회)
 
 ```bash
-# 서버 자동 시작 등록
-bash install-server.sh
-
-# 스케줄러 자동 실행 등록
-bash install-scheduler.sh
+bash install-server.sh     # 서버 자동 시작 등록 (포트 3000)
+bash install-scheduler.sh  # 6시간 간격 스케줄러 등록
 ```
 
 ---
@@ -153,7 +191,8 @@ bash install-scheduler.sh
 2. **재생목록 추가**: URL 입력 후 `+ 추가` 클릭
 3. **체크박스 선택**: 처리할 재생목록만 선택 (헤더 체크박스로 전체 선택/해제)
 4. **▶ 선택 실행** 클릭
-5. 진행 상황 실시간 확인 및 처리 결과 테이블 자동 스크롤
+5. 진행 상황 실시간 확인
+6. 완료 시 텔레그램 알림 수신 (노션 + Obsidian 결과 포함)
 
 ---
 
@@ -167,12 +206,92 @@ launchctl list | grep irichgreen
 launchctl start com.irichgreen.ytsummarizer
 
 # 서버 재시작
-launchctl stop com.irichgreen.server
-launchctl start com.irichgreen.server
+launchctl stop com.irichgreen.server && launchctl start com.irichgreen.server
 
 # 로그 확인
 tail -f ~/Documents/Claude/Youtube_Notion_Grap/scheduler.log
-tail -f ~/Documents/Claude/Youtube_Notion_Grap/scheduler-stdout.log
+```
+
+---
+
+## ⚙️ 성능 최적화
+
+- **YouTube 배치 조회**: 영상 50개씩 묶어서 API 호출 (1,200번 → 24번)
+- **Notion 전체 캐시**: 실행 시작 시 DB 전체 로드 → 메모리에서 중복 체크
+- **채널 구독자 병렬 조회**: `Promise.all`로 채널별 동시 조회
+- **Gemini 병렬 요약**: 신규 영상 3개씩 동시 처리
+- **스마트 Skip**: 중복 영상은 딜레이 없이 즉시 처리
+- **조회수 스마트 업데이트**: 10% 이상 변화 시만 Notion API 호출
+- **Obsidian 증분 동기화**: notion_id 기반으로 신규 영상만 추가 (전체 재생성 X)
+
+> 1,200개 영상 기준: 기존 2시간 37분 → **약 3~5분**으로 단축
+
+
+---
+
+## 📓 Obsidian LLM Wiki
+
+노션에 저장된 AI 영상 요약을 Obsidian 지식베이스로 자동 변환합니다.
+
+### Vault 구조
+
+```
+📁 Obsidian Vault/
+├── 📁 _MOC/                        ← 허브 파일 (Map of Contents)
+│   ├── 🗂 AI 바이브코딩 MOC.md     ← 재생목록별 영상 목차
+│   ├── 🗂 AI Claude MOC.md
+│   ├── 📋 채널별 목차.md           ← 채널별 영상 목록
+│   └── 🔑 키워드 인덱스.md         ← AI 도구/기술 키워드 인덱스
+├── 📁 AI 바이브코딩/               ← 재생목록별 폴더
+│   └── 채널명_영상제목_날짜.md     ← 영상 요약 파일
+├── 📁 AI Claude/
+├── 📁 AI Gemini/
+├── 📁 AI LLM Wiki/                 ← Karpathy LLM Wiki 관련
+├── ... (재생목록별 폴더)
+└── 🗂 전체 인덱스.md               ← Wiki 시작점
+```
+
+### 각 영상 .md 파일 구조
+
+```markdown
+---
+title: "영상 제목"
+channel: "채널명"
+tags: ["AI 바이브코딩", "AI Claude"]
+upload_date: 2026-03-15
+view_count: 42000
+subscriber_count: 141000
+video_url: https://youtube.com/watch?v=...
+notion_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+---
+
+## 영상 개요
+...
+
+## 핵심 내용
+...Gemini AI가 생성한 요약...
+
+---
+## 🔗 관련 항목
+[[Claude]] [[MCP]] [[바이브코딩]]
+
+**재생목록**: [[AI 바이브코딩 MOC]]
+```
+
+### Obsidian 관련 명령
+
+```bash
+# 전체 마이그레이션 (최초 1회)
+node notion_to_obsidian.js
+
+# 증분 동기화 + Wiki 재구성
+python3 sync_obsidian.py
+
+# Wiki 강제 재구성 (파일 추가 없이 링크만 재구성)
+python3 sync_obsidian.py --rebuild
+
+# MOC + 키워드 링크만 재구성
+python3 build_obsidian_wiki.py
 ```
 
 ---
@@ -190,7 +309,27 @@ tail -f ~/Documents/Claude/Youtube_Notion_Grap/scheduler-stdout.log
 | 영상 URL | URL | YouTube 영상 링크 |
 | 썸네일 URL | URL | 영상 썸네일 이미지 |
 | 처리 상태 | Select | 완료 / 오류 |
-| 주제 | Multi-Select | 재생목록명 (다중 선택) |
+| 주제 | Multi-Select | 재생목록명 (playlists.json 기반) |
+
+---
+
+## 📱 텔레그램 알림 형식
+
+```
+🎬 YouTube → Notion 요약 완료
+📅 2026. 4. 15. PM 6:00
+⏱ 소요시간: 43분 56초
+
+• AI 바이브 코딩: 저장 2/ 스킵 569/ 오류 0
+• AI Claude: 저장 1/ 스킵 495/ 오류 0
+...
+📊 합계: 저장 12/ 스킵 2283/ 오류 0
+
+📓 Obsidian AI LLM Wiki
+  • 신규 추가: 12개
+  • Wiki 재구성: ✅ 완료
+  • 소요시간: 87초
+```
 
 ---
 
@@ -198,23 +337,36 @@ tail -f ~/Documents/Claude/Youtube_Notion_Grap/scheduler-stdout.log
 
 | 버전 | 주요 내용 |
 |------|-----------|
-| v1~v10 | 기본 기능 구현 (YouTube 수집, Gemini 요약, Notion 저장) |
-| v11~v20 | UI 개선, 텔레그램/이메일 알림 추가 |
-| v21~v30 | 체크박스 선택 실행, 처리 결과 테이블 추가 |
-| v31~v40 | Notion 전체 캐시, YouTube 배치 조회 최적화 |
-| v41~v50 | 중복 저장 버그 수정, 실시간 카운트, 자동 스크롤 |
-| v51~v60 | 병렬 처리, 속도 최적화, 파비콘, launchd 자동 시작 |
-| v61~v63 | node 경로 수정, 조회수/구독자 비교 버그 수정, 극한 속도 개선 |
+| v1~v62 | 기본 기능 구현, UI 개선, 성능 최적화, 버그 수정 |
+| v63 | 조회수/구독자 비교 버그 수정, 극한 속도 개선 |
+| v64 | API 키를 `.env` 파일로 분리 (보안 강화) |
+| v65 | 웹앱 API 키 `.env` 자동 로드 (`/api/config` 엔드포인트) |
+| v66~v67 | 포트 3000 정리 (웹앱 3000, 재무자동화 3001, 대시보드 5173) |
+| v68~v70 | 텔레그램 메시지 포맷 간소화 (한글화, 글자수 단축) |
+| v71 | 재생목록 주제 태그 이모지 깨짐 수정 (playlists.json name 사용) |
+| v72 | Obsidian LLM Wiki 자동 동기화 파이프라인 구축 |
+| v73 | 텔레그램 알림에 Obsidian 동기화 결과 포함 |
 
 ---
 
 ## 🔒 보안 주의사항
 
-- `scheduler.js`의 API 키는 환경변수로 분리 권장
-- `playlists.json`은 개인 재생목록 정보 포함 — `.gitignore`에 추가 권장
-- Notion 토큰은 외부 공개 금지
+- **`.env` 파일**: API 키 보관 — `.gitignore`에 등록되어 GitHub에 절대 올라가지 않음
+- **Notion 토큰**: 외부 공개 금지
+- **Gemini API 키**: 이 프로젝트 전용 별도 키 사용 권장 (Google Cloud 비용 분리)
+- **playlists.json**: 개인 재생목록 정보 포함 — 필요 시 `.gitignore` 추가 권장
+
+---
+
+## 🔌 포트 구성
+
+| 포트 | 프로그램 |
+|------|---------|
+| **3000** | YouTube → Notion AI 요약기 (이 프로그램) |
+| **3001** | 재무 데이터 자동 다운로드 및 엑셀 업데이트 |
+| **5173** | 아이리치그린 재무 대시보드 |
 
 ---
 
 © 2026 iRichGreen AI Development Team.  
-Powered by **Claude (Anthropic)** & **Gemini 2.5 Flash (Google)**.
+Powered by **Claude (Anthropic)** & **Gemini 2.5 Flash (Google)**
