@@ -119,6 +119,7 @@ Youtube_Notion_Grap/
 ├── notion_to_obsidian.js              # Notion → Obsidian 일회성 마이그레이션
 ├── sync_obsidian.py                   # Obsidian 증분 동기화 (신규 영상만 추가)
 ├── build_obsidian_wiki.py             # MOC + 채널 목차 + 키워드 링크 빌더
+├── cleanup_duplicates.py              # 노션/Obsidian 중복 정리 도구
 ├── com.irichgreen.server.plist        # launchd 서버 자동시작 설정
 ├── com.irichgreen.ytsummarizer.plist  # launchd 스케줄러 설정
 ├── install-server.sh                  # 서버 자동시작 설치 스크립트
@@ -292,6 +293,10 @@ python3 sync_obsidian.py --rebuild
 
 # MOC + 키워드 링크만 재구성
 python3 build_obsidian_wiki.py
+
+# 노션 + Obsidian 중복 정리 (dry-run: 실제 삭제 없이 확인만)
+python3 cleanup_duplicates.py --dry-run
+python3 cleanup_duplicates.py
 ```
 
 ---
@@ -309,7 +314,7 @@ python3 build_obsidian_wiki.py
 | 영상 URL | URL | YouTube 영상 링크 |
 | 썸네일 URL | URL | 영상 썸네일 이미지 |
 | 처리 상태 | Select | 완료 / 오류 |
-| 주제 | Multi-Select | 재생목록명 (playlists.json 기반) |
+| 주제 | Multi-Select | 재생목록명 (playlists.json 기반, AI 바이브코딩 등 한글 통일) |
 
 ---
 
@@ -346,6 +351,9 @@ python3 build_obsidian_wiki.py
 | v71 | 재생목록 주제 태그 이모지 깨짐 수정 (playlists.json name 사용) |
 | v72 | Obsidian LLM Wiki 자동 동기화 파이프라인 구축 |
 | v73 | 텔레그램 알림에 Obsidian 동기화 결과 포함 |
+| v74 | URL 기준 중복 체크 변경 + 노션/Obsidian 중복 정리 스크립트 추가 |
+| v75 | 주제 태그 `AI 바이브 코딩` → `AI 바이브코딩` 통합 정리 |
+| v76 | 주제 태그 명칭 정리 (AI Notebook LM→AI 노트북 LM, AI 구글 AI Studio→AI Studio, AI 구글 Gemma→AI Gemma) |
 
 ---
 
