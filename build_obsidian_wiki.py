@@ -174,21 +174,24 @@ def add_keyword_links(files):
             pattern = r'(?<!\[\[)(?<!\|)' + re.escape(kw) + r'(?!\]\])(?!\|)'
             new_body = re.sub(pattern, link, new_body, count=1)  # 파일당 1회만
 
-        if new_body != body:
-            # 관련 키워드 섹션 추가
-            found_kws = []
-            for kw in sorted_kw:
-                alias = KEYWORD_ALIAS.get(kw, kw)
-                if f'[[{alias}]]' in new_body or f'[[{alias}|' in new_body:
-                    found_kws.append(alias)
+        # 관련 키워드 수집
+        found_kws = []
+        for kw in sorted_kw:
+            alias = KEYWORD_ALIAS.get(kw, kw)
+            if f'[[{alias}]]' in new_body or f'[[{alias}|' in new_body:
+                found_kws.append(alias)
 
-            # 파일 하단에 관련 링크 섹션 추가
-            related = f'\n\n---\n## 🔗 관련 항목\n'
-            related += ' '.join([f'[[{k}]]' for k in found_kws[:10]])
-            related += f'\n\n**재생목록**: [[{f["folder"]} MOC]]\n'
+        # 기존 관련 항목 섹션 제거 (재생성)
+        new_body = re.sub(r'\n\n---\n## 🔗 관련 항목\n[\s\S]*$', '', new_body)
 
-            open(f['path'], 'w', encoding='utf-8').write(frontmatter + new_body + related)
-            updated += 1
+        # 파일 하단에 관련 링크 섹션 추가 (키워드 유무 관계없이 항상 MOC 링크 포함)
+        related = f'\n\n---\n## 🔗 관련 항목\n'
+        if found_kws:
+            related += ' '.join([f'[[{k}]]' for k in found_kws[:10]]) + '\n'
+        related += f'\n**재생목록**: [[{f["folder"]} MOC]]\n'
+
+        open(f['path'], 'w', encoding='utf-8').write(frontmatter + new_body + related)
+        updated += 1
 
     print(f"  ✅ {updated}개 파일 키워드 링크 삽입 완료")
 
