@@ -308,6 +308,67 @@ def lint_wiki(files):
         print(f'  ⚠️  {problem_count}개 항목 발견 → _MOC/lint.md 확인')
     print(f'  ✅ lint.md 저장 완료')
 
+# ══════════════════════════════════════════════
+# 5단계: schema.md 자동 재생성
+# ══════════════════════════════════════════════
+def build_schema(files):
+    from datetime import datetime
+    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+
+    # 현재 폴더/태그 목록 동적 수집
+    folders = sorted(set(f['folder'] for f in files))
+    all_tags = sorted(set(t for f in files for t in f['tags'] if t))
+    total = len(files)
+    channels = len(set(f['channel'] for f in files))
+    total_views = sum(int(f.get('view_count', 0) or 0) for f in files)
+
+    lines = [
+        f'# 📐 AI LLM Wiki Schema\n\n',
+        f'> 자동 생성됨: {now} | 총 {total}개 파일 | {channels}개 채널 | 누적 조회수 {total_views:,}회\n',
+        f'> Wiki 구조, 규칙, 워크플로우를 정의합니다. `build_obsidian_wiki.py` 실행 시 자동으로 업데이트됩니다.\n\n---\n\n',
+
+        '## 📁 Vault 구조\n\n```\nAI LLM Wiki/\n',
+        '├── 📁 _MOC/                    # 허브 파일 모음\n',
+        '│   ├── {재생목록명} MOC.md     # 재생목록별 영상 목차\n',
+        '│   ├── 채널별 목차.md\n',
+        '│   ├── 키워드 인덱스.md\n',
+        '│   ├── lint.md                 # 헬스체크 결과\n',
+        '│   └── dataview-queries.md     # Dataview 쿼리 모음\n',
+    ]
+    for folder in folders:
+        cnt = sum(1 for f in files if f['folder'] == folder)
+        lines.append(f'├── 📁 {folder}/  ({cnt}개)\n')
+    lines.append('├── 🗂 전체 인덱스.md\n├── log.md\n└── schema.md  ← 이 파일\n```\n\n---\n\n')
+
+    lines.append('## 📄 파일명 규칙\n\n```\n채널명_영상제목_날짜.md\n예) 오후다섯씨_Claude Code 완벽 가이드_20260315.md\n```\n- 특수문자 `/ \\ : * ? " < > | #` → `_` 치환, 최대 120자\n\n---\n\n')
+
+    lines.append('## 🏷️ YAML Frontmatter 형식\n\n```yaml\n---\ntitle: "영상 제목"\nchannel: "채널명"\ntags: ["AI 바이브코딩", "AI Claude"]\nupload_date: 2026-03-15\nview_count: 42000\nsubscriber_count: 141000\nvideo_url: https://youtube.com/watch?v=xxxxx\nstatus: 완료\nnotion_id: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx\n---\n```\n\n---\n\n')
+
+    lines.append(f'## 🏷️ 주제 태그 목록 (현재 {len(all_tags)}개)\n\n')
+    lines.append('| 태그 | 영상 수 |\n|------|--------|\n')
+    tag_counts = defaultdict(int)
+    for f in files:
+        for t in f['tags']:
+            tag_counts[t] += 1
+    for tag in sorted(all_tags):
+        lines.append(f'| {tag} | {tag_counts.get(tag, 0)}개 |\n')
+    lines.append('\n---\n\n')
+
+    lines.append('## 🔑 키워드 링크 대상\n\n')
+    lines.append('`Claude` `Gemini` `GPT` `ChatGPT` `NotebookLM` `Gemma`\n')
+    lines.append('`Claude Code` `Antigravity` `Lovable` `Replit` `OpenClaw` `Cowork` `n8n` `MCP` `API`\n')
+    lines.append('`RAG` `LLM` `Agent` `에이전트` `바이브코딩` `Prompt` `프롬프트`\n')
+    lines.append('`Google AI Studio` `Opal` `오팔` `Genspark` `젠스파크`\n')
+    lines.append('`Obsidian` `옵시디언` `Notion` `노션`\n\n---\n\n')
+
+    lines.append('## 🔄 워크플로우\n\n')
+    lines.append('### 자동 파이프라인\n```\nYouTube → Gemini 요약 → Notion 저장\n→ sync_obsidian.py → .md 생성 → build_obsidian_wiki.py\n→ MOC + 키워드 링크 + lint + schema 재생성 → log.md 기록\n```\n\n')
+    lines.append('### 수동 명령어\n```bash\npython3 sync_obsidian.py --rebuild   # 전체 재구성\npython3 build_obsidian_wiki.py       # MOC/링크/schema 재구성\npython3 cleanup_duplicates.py        # 중복 정리\ngrep "^## \\[" log.md | tail -10      # 최근 10개 변경 이력\n```\n\n')
+    lines.append('*이 파일은 `build_obsidian_wiki.py` 실행 시 자동으로 재생성됩니다.*\n')
+
+    open(os.path.join(VAULT, 'schema.md'), 'w', encoding='utf-8').write(''.join(lines))
+    print(f'  ✅ schema.md 자동 재생성 완료 (태그 {len(all_tags)}개, 폴더 {len(folders)}개)')
+
 # ── 메인 실행 ──
 if __name__ == '__main__':
     print('📚 Obsidian LLM Wiki 빌더 시작\n')
@@ -332,6 +393,10 @@ if __name__ == '__main__':
     # ── Lint 실행 ──
     print('\n🔍 Wiki Lint 실행 중...')
     lint_wiki(files)
+
+    # ── schema.md 자동 재생성 ──
+    print('\n📐 schema.md 업데이트 중...')
+    build_schema(files)
 
     # ── log.md 기록 (직접 실행 시에만) ──
     try:
