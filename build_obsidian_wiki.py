@@ -24,31 +24,32 @@ VALID_NOTION_TAGS = {
 
 # ── 사전 정의 키워드 목록 (AI 도구/기술명) ──
 KEYWORDS = [
-    # AI 모델/서비스
-    'Claude', 'Gemini', 'GPT', 'ChatGPT', 'Grok', 'Perplexity',
-    'NotebookLM', 'Notebook LM', 'Gemma',
-    # 개발 도구
-    'Claude Code', 'Antigravity', 'AntiGravity', 'Lovable', 'Replit',
-    'Cursor', 'OpenClaw', 'Cowork', 'n8n', 'Make', 'Zapier',
-    'Vite', 'React', 'MCP', 'API',
-    # AI 기술
-    'RAG', 'LLM', 'Agent', '에이전트', '바이브코딩', 'Vibe Coding',
-    'Prompt', '프롬프트', 'Fine-tuning',
-    # 플랫폼/서비스
-    'Google AI Studio', 'Opal', '오팔', 'Genspark', '젠스파크',
-    'Obsidian', '옵시디언', 'Notion', '노션',
-    'YouTube', 'Gamma', '감마', 'Canva', '캔버스',
-    # 이미지/영상
-    'Seedance', 'Kling', 'Nano Banana', '나노바나나', 'Sora',
-    # 기타 기술
-    'MCP', 'A2A', 'RAG', 'Vector', 'Embedding',
+    # AI 모델/서비스 (고유명사만)
+    'Claude Code', 'Claude',
+    'NotebookLM', 'Notebook LM',
+    'Gemini', 'Gemma',
+    'ChatGPT', 'GPT',
+    'Grok', 'Perplexity',
+    # AI 개발 도구 (고유명사만)
+    'Antigravity', 'AntiGravity',
+    'Lovable', 'Replit', 'Cursor',
+    'OpenClaw', 'Cowork',
+    'n8n', 'Genspark', '젠스파크',
+    # AI 플랫폼
+    'Google AI Studio',
+    'Opal', '오팔',
+    'Obsidian', '옵시디언',
+    # 영상/이미지 AI
+    'Seedance', 'Kling', '나노바나나',
+    'Sora', 'Veo',
+    # AI 기술 용어 (약어 제외 - 빈 파일 생성 방지)
+    'RAG', 'LLM',
 ]
 
-# 키워드 → Obsidian 링크 형식 매핑 (표시명이 다른 경우)
+# 키워드 → Obsidian 링크 표시명 매핑
 KEYWORD_ALIAS = {
     'Notebook LM': 'NotebookLM',
     'AntiGravity': 'Antigravity',
-    'Vibe Coding': '바이브코딩',
 }
 
 def parse_frontmatter(content):
