@@ -135,20 +135,49 @@ def build_moc_files(files):
     open(os.path.join(MOC_DIR, '채널별 목차.md'), 'w', encoding='utf-8').write(''.join(channel_lines))
     print(f"  ✅ 채널별 목차.md ({len(channel_map)}개 채널)")
 
-    # ── 전체 인덱스 MOC ──
+    # ── 전체 인덱스 (카탈로그) ──
+    total_views = sum(int(f.get('view_count', 0) or 0) for f in files)
     index_lines = ['# 🗂 AI LLM Wiki 전체 인덱스\n\n']
-    index_lines.append(f'> 총 {len(files)}개 영상 요약 저장됨\n\n')
-    index_lines.append('## 재생목록별 MOC\n')
+    index_lines.append(f'> 총 **{len(files)}개** 영상 요약 | 누적 조회수 **{total_views:,}회** | 재생목록 **{len(playlist_map)}개**\n\n')
+    index_lines.append('---\n\n')
+
+    # 탐색 허브
+    index_lines.append('## 🧭 탐색 허브\n\n')
+    index_lines.append('| 분류 | 링크 | 설명 |\n')
+    index_lines.append('|------|------|------|\n')
     for playlist in sorted(playlist_map.keys()):
         cnt = len(playlist_map[playlist])
-        index_lines.append(f"- [[{playlist} MOC]] — {cnt}개\n")
-    index_lines.append('\n## 채널별 목차\n')
-    index_lines.append('- [[채널별 목차]]\n')
-    index_lines.append('\n## 키워드 인덱스\n')
-    index_lines.append('- [[키워드 인덱스]]\n')
+        top_ch = max(defaultdict(int, {f['channel']: 1 for f in playlist_map[playlist]}).items(), key=lambda x: x[1])[0] if playlist_map[playlist] else ''
+        index_lines.append(f"| {playlist} | [[{playlist} MOC]] | 영상 {cnt}개 |\n")
+    index_lines.append(f"| 채널별 목차 | [[채널별 목차]] | {len(channel_map)}개 채널 |\n")
+    index_lines.append(f"| 키워드 인덱스 | [[키워드 인덱스]] | 주요 AI 도구/기술 |\n")
+    index_lines.append(f"| 변경 이력 | [[log]] | Wiki 업데이트 기록 |\n")
+    index_lines.append('\n---\n\n')
+
+    # 재생목록별 최신 영상 카탈로그
+    index_lines.append('## 📋 재생목록별 최신 영상\n\n')
+    for playlist in sorted(playlist_map.keys()):
+        pfiles = sorted(playlist_map[playlist], key=lambda x: x['upload_date'], reverse=True)
+        index_lines.append(f'### {playlist} ({len(pfiles)}개)\n\n')
+        for f in pfiles[:3]:  # 최신 3개만
+            date = str(f['upload_date'])[:10] if f['upload_date'] else ''
+            ch = f['channel']
+            # 본문에서 첫 문장 추출 (한 줄 요약)
+            summary = ''
+            for line in f['body'].split('\n'):
+                line = line.strip().lstrip('#- *>').strip()
+                if len(line) > 20:
+                    summary = line[:60] + ('...' if len(line) > 60 else '')
+                    break
+            index_lines.append(f"- [[{f['filename']}|{f['title']}]] `{ch}` {date}\n")
+            if summary:
+                index_lines.append(f"  > {summary}\n")
+        if len(pfiles) > 3:
+            index_lines.append(f"- *... 외 {len(pfiles)-3}개 → [[{playlist} MOC]]*\n")
+        index_lines.append('\n')
 
     open(os.path.join(VAULT, '🗂 전체 인덱스.md'), 'w', encoding='utf-8').write(''.join(index_lines))
-    print(f"  ✅ 🗂 전체 인덱스.md")
+    print(f"  ✅ 🗂 전체 인덱스.md (카탈로그 + 한 줄 요약)")
 
 # ══════════════════════════════════════════════
 # 2단계: 각 .md 파일에 키워드 링크 삽입
@@ -223,6 +252,62 @@ def build_keyword_index(files):
     open(os.path.join(MOC_DIR, '키워드 인덱스.md'), 'w', encoding='utf-8').write(''.join(lines))
     print(f"  ✅ 키워드 인덱스.md ({len(kw_map)}개 키워드)")
 
+# ══════════════════════════════════════════════
+# 4단계: Wiki Lint (헬스체크)
+# ══════════════════════════════════════════════
+def lint_wiki(files):
+    issues = []
+
+    # 1. 기타 폴더 파일 (미분류)
+    unclassified = [f for f in files if f['folder'] == '기타']
+    if unclassified:
+        issues.append(f"⚠️  미분류 파일 {len(unclassified)}개 ('기타' 폴더)")
+        for f in unclassified[:5]:
+            issues.append(f"   - {f['filename']}")
+
+    # 2. MOC 링크 없는 고아 파일
+    orphans = []
+    for f in files:
+        content = open(f['path'], encoding='utf-8', errors='ignore').read()
+        has_moc = '재생목록]]' in content or 'MOC]]' in content
+        if not has_moc:
+            orphans.append(f)
+    if orphans:
+        issues.append(f"⚠️  MOC 링크 없는 파일 {len(orphans)}개")
+        for f in orphans[:3]:
+            issues.append(f"   - {f['folder']}/{f['filename']}")
+
+    # 3. 요약 내용이 없거나 너무 짧은 파일
+    thin = [f for f in files if len(f['body'].strip()) < 100]
+    if thin:
+        issues.append(f"⚠️  내용이 너무 짧은 파일 {len(thin)}개 (100자 미만)")
+
+    # 4. 영상 URL 없는 파일
+    no_url = [f for f in files if not f.get('video_url') or f['video_url'] == 'null']
+    if no_url:
+        issues.append(f"⚠️  영상 URL 없는 파일 {len(no_url)}개")
+
+    # 5. 통계 요약
+    total = len(files)
+    with_kw = sum(1 for f in files if '🔗 관련 항목' in open(f['path'], encoding='utf-8', errors='ignore').read())
+    issues.append(f"✅  총 {total}개 파일 | 키워드 링크 있음 {with_kw}개 ({with_kw*100//total}%)")
+
+    # Lint 결과를 _MOC/lint.md에 저장
+    from datetime import datetime
+    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    lint_lines = [f'# 🔍 Wiki Lint 결과\n\n> 마지막 실행: {now}\n\n']
+    for issue in issues:
+        lint_lines.append(f'{issue}\n')
+    open(os.path.join(MOC_DIR, 'lint.md'), 'w', encoding='utf-8').write(''.join(lint_lines))
+
+    # 콘솔 출력
+    problem_count = sum(1 for i in issues if i.startswith('⚠️'))
+    if problem_count == 0:
+        print('  ✅ 이상 없음!')
+    else:
+        print(f'  ⚠️  {problem_count}개 항목 발견 → _MOC/lint.md 확인')
+    print(f'  ✅ lint.md 저장 완료')
+
 # ── 메인 실행 ──
 if __name__ == '__main__':
     print('📚 Obsidian LLM Wiki 빌더 시작\n')
@@ -243,6 +328,10 @@ if __name__ == '__main__':
 
     print('\n✅ 완료!')
     print(f'📁 MOC 폴더: {MOC_DIR}')
+
+    # ── Lint 실행 ──
+    print('\n🔍 Wiki Lint 실행 중...')
+    lint_wiki(files)
 
     # ── log.md 기록 (직접 실행 시에만) ──
     try:
