@@ -6,7 +6,7 @@
 #   3. Obsidian에서도 중복 .md 파일 삭제
 # 실행: python3 cleanup_duplicates.py [--dry-run]
 
-import os, re, json, ssl, sys
+import os, re, json, ssl, sys, time
 from urllib.request import urlopen, Request
 from collections import defaultdict
 
@@ -105,7 +105,15 @@ def merge_topics(page_id, all_topics):
 
 # ── 노션 페이지 아카이브(삭제) ──
 def archive_page(page_id):
-    notion_call('PATCH', f'/v1/pages/{page_id}', {'in_trash': True})
+    for attempt in range(3):
+        try:
+            notion_call('PATCH', f'/v1/pages/{page_id}', {'in_trash': True})
+            return True
+        except Exception as e:
+            if attempt < 2:
+                time.sleep(2)
+            else:
+                raise e
 
 # ── Obsidian에서 notion_id로 파일 찾기 ──
 def find_obsidian_file(notion_id):

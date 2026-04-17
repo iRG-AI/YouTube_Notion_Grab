@@ -364,6 +364,8 @@ python3 cleanup_duplicates.py
 | v81 | schema.md 자동 재생성 — build 실행 시 태그/폴더 현황 동적 반영 |
 | v82 | 구독자수 업데이트 조건 변경 (단순 변경 → 20% 이상 변화 시만) |
 | v83 | 조회수 업데이트 조건 변경 (10% → 20% 이상 변화 시만) + README 동기화 |
+| v84 | VALID_NOTION_TAGS 상수 추가, 구버전 태그 MOC 자동 방지, 다중 태그 MOC 링크로 독립 노드 해소 |
+| v85 | 기타 MOC/폴더 제거, cleanup_duplicates.py 오류 재시도 로직 추가 |
 
 ---
 
