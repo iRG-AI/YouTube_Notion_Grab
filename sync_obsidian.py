@@ -5,13 +5,48 @@
 #   2. MOC + 키워드 링크 전체 재구성
 # 실행: python3 sync_obsidian.py
 
-import os, re, json, ssl, subprocess, sys
+import os, re, json, ssl, subprocess, sys, time
+from datetime import datetime
 from urllib.request import urlopen, Request
 from collections import defaultdict
 
 VAULT    = '/Users/tycoonan/Documents/Obsidian/AI LLM Wiki/AI LLM Wiki'
 MOC_DIR  = os.path.join(VAULT, '_MOC')
+LOG_FILE = os.path.join(VAULT, 'log.md')
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# ── Wiki log.md에 항목 추가 ──
+def write_wiki_log(event_type, summary, details=None):
+    """
+    event_type: 'ingest' | 'rebuild' | 'error'
+    summary: 한 줄 요약
+    details: 추가 정보 dict (선택)
+    """
+    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    today = datetime.now().strftime('%Y-%m-%d')
+
+    # log.md 없으면 헤더와 함께 새로 생성
+    if not os.path.exists(LOG_FILE):
+        header = '# 📋 AI LLM Wiki 변경 이력\n\n> Wiki에 일어난 모든 변경사항을 시간순으로 기록합니다.\n> 파싱 팁: `grep "^## \\[" log.md | tail -10` 으로 최근 10개 확인\n\n'
+        open(LOG_FILE, 'w', encoding='utf-8').write(header)
+
+    # 아이콘 매핑
+    icon = {'ingest': '📥', 'rebuild': '🔧', 'error': '❌', 'cleanup': '🧹'}.get(event_type, '📌')
+
+    # 항목 작성
+    entry = f'## [{today}] {event_type} | {summary}\n'
+    entry += f'> {icon} {now}\n\n'
+    if details:
+        for k, v in details.items():
+            entry += f'- **{k}**: {v}\n'
+    entry += '\n'
+
+    # 파일 앞에 추가 (최신이 위로)
+    existing = open(LOG_FILE, encoding='utf-8').read()
+    # 헤더 이후에 삽입
+    insert_pos = existing.find('\n\n', existing.find('파싱 팁')) + 2
+    new_content = existing[:insert_pos] + entry + existing[insert_pos:]
+    open(LOG_FILE, 'w', encoding='utf-8').write(new_content)
 
 # ── .env 로드 ──
 def load_env():
@@ -183,7 +218,6 @@ def sync_new_pages():
 
 # ── 메인 실행 ──
 if __name__ == '__main__':
-    import time
     log('🚀 Obsidian 증분 동기화 시작\n')
     start = time.time()
 
@@ -213,8 +247,21 @@ if __name__ == '__main__':
     elapsed = round(time.time() - start)
     log('\n🎉 Obsidian 동기화 완료!')
 
+    # ── log.md 기록 ──
+    if added > 0:
+        write_wiki_log('ingest', f'신규 영상 {added}개 추가', {
+            '추가된 파일': f'{added}개',
+            'Wiki 재구성': '완료' if rebuilt else '생략',
+            '소요시간': f'{elapsed}초',
+        })
+    if rebuilt:
+        write_wiki_log('rebuild', 'MOC + 키워드 링크 재구성', {
+            '처리': 'MOC 전체 재생성, 키워드 링크 삽입',
+        })
+    if rebuild_err:
+        write_wiki_log('error', 'Wiki 재구성 실패', {'오류': rebuild_err[:200]})
+
     # 결과를 JSON으로 출력 (scheduler.js에서 파싱)
-    import json
     print('RESULT_JSON:' + json.dumps({
         'added': added,
         'rebuilt': rebuilt,

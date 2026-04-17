@@ -243,3 +243,13 @@ if __name__ == '__main__':
 
     print('\n✅ 완료!')
     print(f'📁 MOC 폴더: {MOC_DIR}')
+
+    # ── log.md 기록 (직접 실행 시에만) ──
+    try:
+        from sync_obsidian import write_wiki_log
+        write_wiki_log('rebuild', f'Wiki 수동 재구성 — {len(files)}개 파일', {
+            '총 파일': f'{len(files)}개',
+            'MOC': f'{len([d for d in os.listdir(MOC_DIR) if d.endswith(".md")])}개',
+        })
+    except Exception:
+        pass
