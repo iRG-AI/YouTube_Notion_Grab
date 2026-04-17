@@ -571,7 +571,8 @@ async function processPlaylist(pl, notionCache) {
         && Math.abs(newViewCount - savedView) / savedView >= 0.1;
       // 구독자수: 숫자 비교 (타입 통일)
       const savedSubs = dup.savedSubscribers || 0;
-      const subsChanged = savedSubs > 0 && newSubscribers > 0 && savedSubs !== newSubscribers;
+      const subsChanged = savedSubs > 0 && newSubscribers > 0
+        && Math.abs(newSubscribers - savedSubs) / savedSubs >= 0.2;
       const dateChanged = newDate && dup.savedDate && dup.savedDate !== newDate;
       if (viewChanged || subsChanged || dateChanged) {
         await updateStats(dup.pageId, newViewCount, newSubscribers, dateChanged ? newDate : null);
