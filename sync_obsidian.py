@@ -5,7 +5,7 @@
 #   2. MOC + 키워드 링크 전체 재구성
 # 실행: python3 sync_obsidian.py
 
-import os, re, json, ssl, subprocess, sys, time
+import os, re, json, ssl, subprocess, sys, time, unicodedata
 from datetime import datetime
 from urllib.request import urlopen, Request
 from collections import defaultdict
@@ -14,6 +14,10 @@ VAULT    = '/Users/tycoonan/Documents/Obsidian/AI LLM Wiki/AI LLM Wiki'
 MOC_DIR  = os.path.join(VAULT, '_MOC')
 LOG_FILE = os.path.join(VAULT, 'log.md')
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def nfc(s):
+    """macOS NFD 파일명을 NFC로 정규화 (한글 깨짐 방지)"""
+    return unicodedata.normalize('NFC', s) if s else s
 
 # ── Wiki log.md에 항목 추가 ──
 def write_wiki_log(event_type, summary, details=None):
@@ -95,7 +99,8 @@ def get_existing_notion_ids():
         dirs[:] = [d for d in dirs if not d.startswith('.') and d != '_MOC']
         for f in files:
             if not f.endswith('.md'): continue
-            content = open(os.path.join(root, f), encoding='utf-8', errors='ignore').read()
+            fpath = os.path.join(root, f)
+            content = nfc(open(fpath, encoding='utf-8', errors='ignore').read())
             m = re.search(r'^notion_id:\s*(.+)$', content, re.MULTILINE)
             if m:
                 ids.add(m.group(1).strip())
@@ -156,15 +161,15 @@ def save_page_as_md(page):
     status        = props.get('처리 상태', {}).get('select', {}).get('name', '') or ''
 
     date_part = (upload_date[:10].replace('-', '') if upload_date else '00000000')
-    filename  = safe_filename(f'{channel}_{title}_{date_part}') + '.md'
+    filename  = nfc(safe_filename(f'{channel}_{title}_{date_part}') + '.md')
 
-    dir_path = os.path.join(VAULT, safe_filename(folder))
+    dir_path = os.path.join(VAULT, nfc(safe_filename(folder)))
     os.makedirs(dir_path, exist_ok=True)
 
     blocks  = get_blocks(page['id'])
     body_md = '\n'.join(block_to_md(b) for b in blocks)
 
-    md = '\n'.join([
+    md = nfc('\n'.join([
         '---',
         f'title: "{title.replace(chr(34), chr(39))}"',
         f'channel: "{channel}"',

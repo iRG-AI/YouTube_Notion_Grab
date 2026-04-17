@@ -4,11 +4,15 @@
 # 2단계: 각 .md 파일에 키워드 링크 자동 삽입
 # 실행: python3 build_obsidian_wiki.py
 
-import os, re
+import os, re, unicodedata
 from collections import defaultdict
 
 VAULT = '/Users/tycoonan/Documents/Obsidian/AI LLM Wiki/AI LLM Wiki'
 MOC_DIR = os.path.join(VAULT, '_MOC')
+
+def nfc(s):
+    """macOS NFD 파일명을 NFC로 정규화 (한글 깨짐 방지)"""
+    return unicodedata.normalize('NFC', s) if s else s
 
 # ── 노션 유효 태그 목록 (이것만 MOC 생성 + 폴더 사용) ──
 # 새 태그 추가 시 여기에도 반드시 추가할 것
@@ -69,16 +73,18 @@ def parse_frontmatter(content):
     return fm, body
 
 def get_all_files():
-    """모든 .md 파일과 메타데이터 수집"""
+    """모든 .md 파일과 메타데이터 수집 (NFC 정규화로 한글 깨짐 방지)"""
     files = []
-    for folder in os.listdir(VAULT):
-        folder_path = os.path.join(VAULT, folder)
+    for folder_raw in os.listdir(VAULT):
+        folder = nfc(folder_raw)  # NFD→NFC
+        folder_path = os.path.join(VAULT, folder_raw)
         if not os.path.isdir(folder_path) or folder.startswith('.') or folder.startswith('_'):
             continue
-        for fname in os.listdir(folder_path):
+        for fname_raw in os.listdir(folder_path):
+            fname = nfc(fname_raw)  # NFD→NFC
             if not fname.endswith('.md'):
                 continue
-            fpath = os.path.join(folder_path, fname)
+            fpath = os.path.join(folder_path, fname_raw)
             content = open(fpath, encoding='utf-8').read()
             fm, body = parse_frontmatter(content)
             files.append({
@@ -130,8 +136,8 @@ def build_moc_files(files):
                 date = str(f['upload_date'])[:10] if f['upload_date'] else ''
                 lines.append(f"- [[{f['filename']}|{f['title']}]] {date}\n")
 
-        moc_path = os.path.join(MOC_DIR, f"{playlist} MOC.md")
-        open(moc_path, 'w', encoding='utf-8').write(''.join(lines))
+        moc_path = os.path.join(MOC_DIR, nfc(f"{playlist} MOC.md"))
+        open(moc_path, 'w', encoding='utf-8').write(unicodedata.normalize('NFC', ''.join(lines)))
         print(f"  ✅ {playlist} MOC.md ({len(pfiles)}개)")
 
     # ── 채널별 MOC ──
