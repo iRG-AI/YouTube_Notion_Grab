@@ -157,7 +157,7 @@ def build_moc_files(files):
             channel_lines.append(f"- ... 외 {len(cfiles)-5}개\n")
         channel_lines.append('\n')
 
-    open(os.path.join(MOC_DIR, '채널별 목차.md'), 'w', encoding='utf-8').write(''.join(channel_lines))
+    open(os.path.join(MOC_DIR, '채널별 목차.md'), 'w', encoding='utf-8').write(nfc(''.join(channel_lines)))
     print(f"  ✅ 채널별 목차.md ({len(channel_map)}개 채널)")
 
     # ── 전체 인덱스 (카탈로그) ──
@@ -201,7 +201,7 @@ def build_moc_files(files):
             index_lines.append(f"- *... 외 {len(pfiles)-3}개 → [[{playlist} MOC]]*\n")
         index_lines.append('\n')
 
-    open(os.path.join(VAULT, '🗂 전체 인덱스.md'), 'w', encoding='utf-8').write(''.join(index_lines))
+    open(os.path.join(VAULT, '🗂 전체 인덱스.md'), 'w', encoding='utf-8').write(nfc(''.join(index_lines)))
     print(f"  ✅ 🗂 전체 인덱스.md (카탈로그 + 한 줄 요약)")
 
 # ══════════════════════════════════════════════
@@ -247,7 +247,7 @@ def add_keyword_links(files):
         moc_links = ' '.join([f'[[{t} MOC]]' for t in all_tags if t])
         related += f'\n**재생목록**: {moc_links}\n'
 
-        open(f['path'], 'w', encoding='utf-8').write(frontmatter + new_body + related)
+        open(f['path'], 'w', encoding='utf-8').write(nfc(frontmatter + new_body + related))
         updated += 1
 
     print(f"  ✅ {updated}개 파일 키워드 링크 삽입 완료")
@@ -277,7 +277,7 @@ def build_keyword_index(files):
             lines.append(f"- [[{f['filename']}|{f['title']}]]\n")
         lines.append('\n')
 
-    open(os.path.join(MOC_DIR, '키워드 인덱스.md'), 'w', encoding='utf-8').write(''.join(lines))
+    open(os.path.join(MOC_DIR, '키워드 인덱스.md'), 'w', encoding='utf-8').write(nfc(''.join(lines)))
     print(f"  ✅ 키워드 인덱스.md ({len(kw_map)}개 키워드)")
 
 # ══════════════════════════════════════════════
@@ -326,7 +326,7 @@ def lint_wiki(files):
     lint_lines = [f'# 🔍 Wiki Lint 결과\n\n> 마지막 실행: {now}\n\n']
     for issue in issues:
         lint_lines.append(f'{issue}\n')
-    open(os.path.join(MOC_DIR, 'lint.md'), 'w', encoding='utf-8').write(''.join(lint_lines))
+    open(os.path.join(MOC_DIR, 'lint.md'), 'w', encoding='utf-8').write(nfc(''.join(lint_lines)))
 
     # 콘솔 출력
     problem_count = sum(1 for i in issues if i.startswith('⚠️'))
@@ -394,7 +394,7 @@ def build_schema(files):
     lines.append('### 수동 명령어\n```bash\npython3 sync_obsidian.py --rebuild   # 전체 재구성\npython3 build_obsidian_wiki.py       # MOC/링크/schema 재구성\npython3 cleanup_duplicates.py        # 중복 정리\ngrep "^## \\[" log.md | tail -10      # 최근 10개 변경 이력\n```\n\n')
     lines.append('*이 파일은 `build_obsidian_wiki.py` 실행 시 자동으로 재생성됩니다.*\n')
 
-    open(os.path.join(VAULT, 'schema.md'), 'w', encoding='utf-8').write(''.join(lines))
+    open(os.path.join(VAULT, 'schema.md'), 'w', encoding='utf-8').write(nfc(''.join(lines)))
     print(f'  ✅ schema.md 자동 재생성 완료 (태그 {len(all_tags)}개, 폴더 {len(folders)}개)')
 
 # ── 메인 실행 ──

@@ -32,7 +32,7 @@ def write_wiki_log(event_type, summary, details=None):
     # log.md 없으면 헤더와 함께 새로 생성
     if not os.path.exists(LOG_FILE):
         header = '# 📋 AI LLM Wiki 변경 이력\n\n> Wiki에 일어난 모든 변경사항을 시간순으로 기록합니다.\n> 파싱 팁: `grep "^## \\[" log.md | tail -10` 으로 최근 10개 확인\n\n'
-        open(LOG_FILE, 'w', encoding='utf-8').write(header)
+        open(LOG_FILE, 'w', encoding='utf-8').write(nfc(header))
 
     # 아이콘 매핑
     icon = {'ingest': '📥', 'rebuild': '🔧', 'error': '❌', 'cleanup': '🧹'}.get(event_type, '📌')
@@ -50,7 +50,7 @@ def write_wiki_log(event_type, summary, details=None):
     # 헤더 이후에 삽입
     insert_pos = existing.find('\n\n', existing.find('파싱 팁')) + 2
     new_content = existing[:insert_pos] + entry + existing[insert_pos:]
-    open(LOG_FILE, 'w', encoding='utf-8').write(new_content)
+    open(LOG_FILE, 'w', encoding='utf-8').write(nfc(new_content))
 
 # ── .env 로드 ──
 def load_env():
