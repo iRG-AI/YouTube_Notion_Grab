@@ -10,6 +10,18 @@ from collections import defaultdict
 VAULT = '/Users/tycoonan/Documents/Obsidian/AI LLM Wiki/AI LLM Wiki'
 MOC_DIR = os.path.join(VAULT, '_MOC')
 
+# ── 노션 유효 태그 목록 (이것만 MOC 생성 + 폴더 사용) ──
+# 새 태그 추가 시 여기에도 반드시 추가할 것
+VALID_NOTION_TAGS = {
+    'AI Antigravity', 'AI Claude', 'AI Codex', 'AI Gemini', 'AI Gemma',
+    'AI LLM Wiki', 'AI Lovable', 'AI OpenCode', 'AI Replit', 'AI Studio',
+    'AI 노트북 LM', 'AI 바이브코딩', 'AI 법률', 'AI 보안', 'AI 생산성 향상',
+    'AI 수익화', 'AI 슬라이드', 'AI 에이전트', 'AI 여행계획', 'AI 영상.이미지',
+    'AI 옵시디언', 'AI 웹사이트', 'AI 음악.음원', 'AI 자동화', 'AI 전환',
+    'AI 젠스파크', 'AI 투자', 'AI 트렌드', 'AI 퍼플렉시티', 'AI 프롬프트', 'AI 하네스',
+    '기타'
+}
+
 # ── 사전 정의 키워드 목록 (AI 도구/기술명) ──
 KEYWORDS = [
     # AI 모델/서비스
@@ -90,10 +102,16 @@ def get_all_files():
 def build_moc_files(files):
     os.makedirs(MOC_DIR, exist_ok=True)
 
-    # ── 재생목록별 MOC ──
+    # ── 재생목록별 MOC (유효 태그만) ──
     playlist_map = defaultdict(list)
     for f in files:
-        playlist_map[f['folder']].append(f)
+        # 모든 태그에 대해 MOC 맵에 추가 (다중 태그 지원)
+        for tag in f.get('tags', [f['folder']]):
+            if tag in VALID_NOTION_TAGS:
+                playlist_map[tag].append(f)
+        # 태그가 없으면 폴더 기준
+        if not f.get('tags'):
+            playlist_map[f['folder']].append(f)
 
     for playlist, pfiles in sorted(playlist_map.items()):
         # 채널별로 그룹화
@@ -217,7 +235,10 @@ def add_keyword_links(files):
         related = f'\n\n---\n## 🔗 관련 항목\n'
         if found_kws:
             related += ' '.join([f'[[{k}]]' for k in found_kws[:10]]) + '\n'
-        related += f'\n**재생목록**: [[{f["folder"]} MOC]]\n'
+        # 모든 태그의 MOC 링크 추가 (다중 태그 영상의 독립 노드 방지)
+        all_tags = f.get('tags', [f['folder']])
+        moc_links = ' '.join([f'[[{t} MOC]]' for t in all_tags if t])
+        related += f'\n**재생목록**: {moc_links}\n'
 
         open(f['path'], 'w', encoding='utf-8').write(frontmatter + new_body + related)
         updated += 1
