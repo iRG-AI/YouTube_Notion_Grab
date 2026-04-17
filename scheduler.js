@@ -338,14 +338,19 @@ async function loadNotionCache() {
       if (!videoId && !title) continue;
       const key = videoId || title; // videoId 우선, 없으면 title
       if (!cache.has(key)) {
-        cache.set(key, {
+        const entry = {
           pageId:           page.id,
           title:            title,
           topics:           (props['주제']?.multi_select || []).map(t => t.name),
           savedViewCount:   props['조회수']?.number ?? null,
           savedSubscribers: props['구독자수']?.number ?? null,
           savedDate:        props['업로드 일자']?.date?.start ?? null,
-        });
+        };
+        cache.set(key, entry);
+        // videoId가 있으면 title로도 등록 (이중 보호)
+        if (videoId && title && !cache.has(title)) {
+          cache.set(title, entry);
+        }
       }
     }
     total += res.data?.results?.length || 0;
