@@ -1360,7 +1360,7 @@
           // 조회수: savedView가 있을 때만, 10% 이상 변화 시만 업데이트
           const savedView = dup.savedViewCount || 0;
           const viewChanged = savedView > 0 && newViewCount > 0
-            && Math.abs(newViewCount - savedView) / savedView >= 0.1;
+            && Math.abs(newViewCount - savedView) / savedView >= 0.2;
           // 구독자수: 숫자 비교 (타입 통일)
           const savedSubs = dup.savedSubscribers || 0;
           const subsChanged = savedSubs > 0 && newSubscribers > 0

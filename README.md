@@ -222,7 +222,7 @@ tail -f ~/Documents/Claude/Youtube_Notion_Grap/scheduler.log
 - **채널 구독자 병렬 조회**: `Promise.all`로 채널별 동시 조회
 - **Gemini 병렬 요약**: 신규 영상 3개씩 동시 처리
 - **스마트 Skip**: 중복 영상은 딜레이 없이 즉시 처리
-- **조회수 스마트 업데이트**: 10% 이상 변화 시만 Notion API 호출
+- **조회수/구독자 스마트 업데이트**: 20% 이상 변화 시만 Notion API 호출
 - **Obsidian 증분 동기화**: notion_id 기반으로 신규 영상만 추가 (전체 재생성 X)
 
 > 1,200개 영상 기준: 기존 2시간 37분 → **약 3~5분**으로 단축
@@ -242,14 +242,17 @@ tail -f ~/Documents/Claude/Youtube_Notion_Grap/scheduler.log
 │   ├── 🗂 AI 바이브코딩 MOC.md     ← 재생목록별 영상 목차
 │   ├── 🗂 AI Claude MOC.md
 │   ├── 📋 채널별 목차.md           ← 채널별 영상 목록
-│   └── 🔑 키워드 인덱스.md         ← AI 도구/기술 키워드 인덱스
+│   ├── 🔑 키워드 인덱스.md         ← AI 도구/기술 키워드 인덱스
+│   ├── 🔍 lint.md                  ← Wiki 헬스체크 결과 (자동 생성)
+│   └── 📊 dataview-queries.md      ← Dataview 쿼리 모음
 ├── 📁 AI 바이브코딩/               ← 재생목록별 폴더
 │   └── 채널명_영상제목_날짜.md     ← 영상 요약 파일
 ├── 📁 AI Claude/
 ├── 📁 AI Gemini/
-├── 📁 AI LLM Wiki/                 ← Karpathy LLM Wiki 관련
 ├── ... (재생목록별 폴더)
-└── 🗂 전체 인덱스.md               ← Wiki 시작점
+├── 🗂 전체 인덱스.md               ← Wiki 시작점 (카탈로그 + 한 줄 요약)
+├── 📋 log.md                       ← 변경 이력 (자동 기록, append-only)
+└── 📐 schema.md                    ← Wiki 구조 정의 (자동 재생성)
 ```
 
 ### 각 영상 .md 파일 구조
@@ -354,6 +357,13 @@ python3 cleanup_duplicates.py
 | v74 | URL 기준 중복 체크 변경 + 노션/Obsidian 중복 정리 스크립트 추가 |
 | v75 | 주제 태그 `AI 바이브 코딩` → `AI 바이브코딩` 통합 정리 |
 | v76 | 주제 태그 명칭 정리 (AI Notebook LM→AI 노트북 LM, AI 구글 AI Studio→AI Studio, AI 구글 Gemma→AI Gemma) |
+| v77 | 키워드 없는 파일도 MOC 링크 항상 추가 (Obsidian 그래프 독립 노드 해소) |
+| v78 | 캐시 videoId+title 이중 등록으로 중복 저장 버그 수정 |
+| v79 | [1순위] log.md 자동 생성 — sync 실행 시 ingest/rebuild/error 자동 기록 |
+| v80 | [2~5순위] index.md 카탈로그 개선, Lint 헬스체크, schema.md, Dataview 쿼리 (Karpathy LLM Wiki 방법론) |
+| v81 | schema.md 자동 재생성 — build 실행 시 태그/폴더 현황 동적 반영 |
+| v82 | 구독자수 업데이트 조건 변경 (단순 변경 → 20% 이상 변화 시만) |
+| v83 | 조회수 업데이트 조건 변경 (10% → 20% 이상 변화 시만) + README 동기화 |
 
 ---
 
