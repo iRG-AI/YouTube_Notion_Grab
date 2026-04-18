@@ -207,59 +207,29 @@ def build_moc_files(files):
 # 2단계: 각 .md 파일에 키워드 링크 삽입
 # ══════════════════════════════════════════════
 def add_keyword_links(files):
-    """각 파일 본문에서 키워드를 찾아 [[키워드]] 링크로 변환"""
+    """하단 관련 항목에 MOC 링크만 추가 (본문 키워드 치환 제거 - 빈 파일 생성 버그 원천 차단)"""
     updated = 0
-    # 길이 긴 키워드 먼저 처리 (중복 치환 방지)
-    sorted_kw = sorted(KEYWORDS, key=len, reverse=True)
-
     for f in files:
         content = f['content']
-        fm_end = content.find('\n---\n', 4) + 5  # frontmatter 끝 위치
+        fm_end = content.find('\n---\n', 4) + 5
         frontmatter = content[:fm_end]
         body = content[fm_end:]
 
-        new_body = body
-        for kw in sorted_kw:
-            alias = KEYWORD_ALIAS.get(kw, kw)
-            link = f'[[{alias}]]'
-            # [[...]] 안에 이미 있는 것은 절대 치환하지 않음
-            # 방법: [[...]] 블록을 임시 플레이스홀더로 교체 → 치환 → 복원
-            placeholders = {}
-            def save_link(m):
-                key = f'PLACEHOLDER_{len(placeholders)}_END'
-                placeholders[key] = m.group(0)
-                return key
-            protected = re.sub(r'\[\[[^\]]+\]\]', save_link, new_body)
-            # 키워드 치환 (1회만)
-            protected = re.sub(re.escape(kw), link, protected, count=1)
-            # 플레이스홀더 복원
-            for key, val in placeholders.items():
-                protected = protected.replace(key, val)
-            new_body = protected
+        # 기존 관련 항목 섹션 제거
+        new_body = re.sub(r'\n\n---\n## 🔗 관련 항목\n[\s\S]*$', '', body)
 
-        # 관련 키워드 수집
-        found_kws = []
-        for kw in sorted_kw:
-            alias = KEYWORD_ALIAS.get(kw, kw)
-            if f'[[{alias}]]' in new_body or f'[[{alias}|' in new_body:
-                found_kws.append(alias)
-
-        # 기존 관련 항목 섹션 제거 (재생성)
-        new_body = re.sub(r'\n\n---\n## 🔗 관련 항목\n[\s\S]*$', '', new_body)
-
-        # 파일 하단에 관련 링크 섹션 추가 (키워드 유무 관계없이 항상 MOC 링크 포함)
-        related = f'\n\n---\n## 🔗 관련 항목\n'
-        if found_kws:
-            related += ' '.join([f'[[{k}]]' for k in found_kws[:10]]) + '\n'
-        # 모든 태그의 MOC 링크 추가 (다중 태그 영상의 독립 노드 방지)
+        # 하단에 MOC 링크만 추가
         all_tags = f.get('tags', [f['folder']])
-        moc_links = ' '.join([f'[[{t} MOC]]' for t in all_tags if t])
-        related += f'\n**재생목록**: {moc_links}\n'
+        valid_tags = [t for t in all_tags if t in VALID_NOTION_TAGS]
+        if not valid_tags:
+            valid_tags = [f['folder']]
+        moc_links = ' '.join([f'[[{t} MOC]]' for t in valid_tags])
+        related = f'\n\n---\n## 🔗 관련 항목\n\n**재생목록**: {moc_links}\n'
 
         open(f['path'], 'w', encoding='utf-8').write(nfc(frontmatter + new_body + related))
         updated += 1
 
-    print(f"  ✅ {updated}개 파일 키워드 링크 삽입 완료")
+    print(f"  ✅ {updated}개 파일 MOC 링크 삽입 완료")
 
 # ══════════════════════════════════════════════
 # 3단계: 키워드 인덱스 파일 생성
