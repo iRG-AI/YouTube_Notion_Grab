@@ -222,10 +222,20 @@ def add_keyword_links(files):
         for kw in sorted_kw:
             alias = KEYWORD_ALIAS.get(kw, kw)
             link = f'[[{alias}]]'
-            # 이미 [[...]] 링크 안에 있는 경우 완전히 제외
-            # 앞에 [[ 없고, 뒤에 ]] 없는 경우만 치환
-            pattern = r'(?<!\[)(?<!\[)' + re.escape(kw) + r'(?!\])(?!\])'
-            new_body = re.sub(pattern, link, new_body, count=1)
+            # [[...]] 안에 이미 있는 것은 절대 치환하지 않음
+            # 방법: [[...]] 블록을 임시 플레이스홀더로 교체 → 치환 → 복원
+            placeholders = {}
+            def save_link(m):
+                key = f'PLACEHOLDER_{len(placeholders)}_END'
+                placeholders[key] = m.group(0)
+                return key
+            protected = re.sub(r'\[\[[^\]]+\]\]', save_link, new_body)
+            # 키워드 치환 (1회만)
+            protected = re.sub(re.escape(kw), link, protected, count=1)
+            # 플레이스홀더 복원
+            for key, val in placeholders.items():
+                protected = protected.replace(key, val)
+            new_body = protected
 
         # 관련 키워드 수집
         found_kws = []

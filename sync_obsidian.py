@@ -169,7 +169,7 @@ def save_page_as_md(page):
     blocks  = get_blocks(page['id'])
     body_md = '\n'.join(block_to_md(b) for b in blocks)
 
-    md = nfc('\n'.join([
+    md = '\n'.join([
         '---',
         f'title: "{title.replace(chr(34), chr(39))}"',
         f'channel: "{channel}"',
@@ -185,6 +185,7 @@ def save_page_as_md(page):
         '',
         body_md,
     ])
+    md = nfc(md)  # NFD→NFC 정규화
 
     open(os.path.join(dir_path, filename), 'w', encoding='utf-8').write(md)
     return folder, filename
