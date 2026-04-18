@@ -748,7 +748,8 @@ async function main() {
     execFile(python3, [syncScript], { cwd: __dirname }, async (err, stdout, stderr) => {
       if (err) {
         log(`❌ Obsidian 동기화 오류: ${err.message}`);
-        await sendTelegram(`⚠️ Obsidian 동기화 실패\n${err.message}`);
+        // 노션 메시지에 오류 추가해서 재전송
+        await sendTelegram(msg + `\n\n⚠️ Obsidian 동기화 실패\n${err.message}`);
         return;
       }
       // RESULT_JSON 파싱
@@ -756,7 +757,7 @@ async function main() {
       if (jsonLine) {
         try {
           const r = JSON.parse(jsonLine.replace('RESULT_JSON:', ''));
-          const obsMsg = [
+          const obsSection = [
             ``,
             `📓 Obsidian AI LLM Wiki`,
             `  • 신규 추가: ${r.added}개`,
@@ -764,10 +765,11 @@ async function main() {
             `  • 소요시간: ${r.elapsed}초`,
           ].join('\n');
           log(`✅ Obsidian 동기화 완료! 추가: ${r.added}개`);
-          // 기존 텔레그램 메시지에 Obsidian 결과 추가 전송
-          await sendTelegram(obsMsg);
+          // 노션 메시지 + Obsidian 결과를 합쳐서 하나의 메시지로 전송
+          await sendTelegram(msg + obsSection);
         } catch(e) {
           log(`⚠️ Obsidian 결과 파싱 오류: ${e.message}`);
+          await sendTelegram(msg + `\n\n⚠️ Obsidian 결과 파싱 오류`);
         }
       }
     });
