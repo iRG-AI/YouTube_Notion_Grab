@@ -739,42 +739,39 @@ async function main() {
   await sendTelegram(msg);
   await sendEmail(`[YouTube 요약] 완료 - 저장 ${totalSaved}개`, msg);
 
-  // ── Obsidian 동기화 (신규 저장이 있을 때만 실행) ──
-  if (totalSaved > 0) {
-    log('\n🔄 Obsidian 동기화 시작...');
-    const { execFile } = require('child_process');
-    const python3 = '/opt/homebrew/bin/python3';
-    const syncScript = path.join(__dirname, 'sync_obsidian.py');
-    execFile(python3, [syncScript], { cwd: __dirname }, async (err, stdout, stderr) => {
-      if (err) {
-        log(`❌ Obsidian 동기화 오류: ${err.message}`);
-        // 노션 메시지에 오류 추가해서 재전송
-        await sendTelegram(msg + `\n\n⚠️ Obsidian 동기화 실패\n${err.message}`);
-        return;
+  // ── Obsidian 동기화 (항상 실행 - 결과를 노션 메시지에 포함) ──
+  log('\n🔄 Obsidian 동기화 시작...');
+  const { execFile } = require('child_process');
+  const python3 = '/opt/homebrew/bin/python3';
+  const syncScript = path.join(__dirname, 'sync_obsidian.py');
+  const syncArgs = totalSaved > 0 ? [syncScript] : [syncScript, '--rebuild'];
+  execFile(python3, syncArgs, { cwd: __dirname }, async (err, stdout, stderr) => {
+    if (err) {
+      log(`❌ Obsidian 동기화 오류: ${err.message}`);
+      await sendTelegram(msg + `\n\n⚠️ Obsidian 동기화 실패`);
+      return;
+    }
+    const jsonLine = stdout.split('\n').find(l => l.startsWith('RESULT_JSON:'));
+    if (jsonLine) {
+      try {
+        const r = JSON.parse(jsonLine.replace('RESULT_JSON:', ''));
+        const obsSection = [
+          ``,
+          `📓 Obsidian AI LLM Wiki`,
+          `  • 신규 추가: ${r.added}개`,
+          `  • Wiki 재구성: ${r.rebuilt ? '✅ 완료' : '⏭ 생략'}`,
+          `  • 소요시간: ${r.elapsed}초`,
+        ].join('\n');
+        log(`✅ Obsidian 동기화 완료! 추가: ${r.added}개`);
+        await sendTelegram(msg + obsSection);
+      } catch(e) {
+        log(`⚠️ Obsidian 결과 파싱 오류: ${e.message}`);
+        await sendTelegram(msg);
       }
-      // RESULT_JSON 파싱
-      const jsonLine = stdout.split('\n').find(l => l.startsWith('RESULT_JSON:'));
-      if (jsonLine) {
-        try {
-          const r = JSON.parse(jsonLine.replace('RESULT_JSON:', ''));
-          const obsSection = [
-            ``,
-            `📓 Obsidian AI LLM Wiki`,
-            `  • 신규 추가: ${r.added}개`,
-            `  • Wiki 재구성: ${r.rebuilt ? '✅ 완료' : '⏭ 생략'}`,
-            `  • 소요시간: ${r.elapsed}초`,
-          ].join('\n');
-          log(`✅ Obsidian 동기화 완료! 추가: ${r.added}개`);
-          // 노션 메시지 + Obsidian 결과를 합쳐서 하나의 메시지로 전송
-          await sendTelegram(msg + obsSection);
-        } catch(e) {
-          log(`⚠️ Obsidian 결과 파싱 오류: ${e.message}`);
-          await sendTelegram(msg + `\n\n⚠️ Obsidian 결과 파싱 오류`);
-        }
-      }
-    });
-  }
-}
+    } else {
+      await sendTelegram(msg);
+    }
+  });
 
 main().catch(e => {
   log(`❌ 치명적 오류: ${e.message}`);
