@@ -28,11 +28,11 @@ VALID_NOTION_TAGS = {
 
 # ── 사전 정의 키워드 목록 (AI 도구/기술명) ──
 KEYWORDS = [
-    # AI 모델/서비스 (고유명사만)
+    # AI 모델/서비스 (고유명사만, 다른 단어에 포함되지 않는 것만)
     'Claude Code', 'Claude',
     'NotebookLM', 'Notebook LM',
     'Gemini', 'Gemma',
-    'ChatGPT', 'GPT',
+    'ChatGPT',
     'Grok', 'Perplexity',
     # AI 개발 도구 (고유명사만)
     'Antigravity', 'AntiGravity',
@@ -46,8 +46,7 @@ KEYWORDS = [
     # 영상/이미지 AI
     'Seedance', 'Kling', '나노바나나',
     'Sora', 'Veo',
-    # AI 기술 용어 (약어 제외 - 빈 파일 생성 방지)
-    'RAG', 'LLM',
+    # 주의: LLM, RAG, GPT 등 다른 단어에 포함되는 약어는 제외
 ]
 
 # 키워드 → Obsidian 링크 표시명 매핑
@@ -222,11 +221,11 @@ def add_keyword_links(files):
         new_body = body
         for kw in sorted_kw:
             alias = KEYWORD_ALIAS.get(kw, kw)
-            link = f'[[{alias}]]' if alias == kw else f'[[{alias}|{kw}]]'
-            # 이미 링크된 것, 코드블록 내부, frontmatter 제외
-            # 단어 경계로 매칭 (앞뒤가 이미 [[]] 아닌 경우만)
-            pattern = r'(?<!\[\[)(?<!\|)' + re.escape(kw) + r'(?!\]\])(?!\|)'
-            new_body = re.sub(pattern, link, new_body, count=1)  # 파일당 1회만
+            link = f'[[{alias}]]'
+            # 이미 [[...]] 링크 안에 있는 경우 완전히 제외
+            # 앞에 [[ 없고, 뒤에 ]] 없는 경우만 치환
+            pattern = r'(?<!\[)(?<!\[)' + re.escape(kw) + r'(?!\])(?!\])'
+            new_body = re.sub(pattern, link, new_body, count=1)
 
         # 관련 키워드 수집
         found_kws = []
