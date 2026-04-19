@@ -772,6 +772,7 @@ async function main() {
       await sendTelegram(msg);
     }
   });
+}
 
 main().catch(e => {
   log(`❌ 치명적 오류: ${e.message}`);
