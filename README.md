@@ -369,6 +369,11 @@ python3 cleanup_duplicates.py
 | v86 | 키워드 목록 엄선 — 빈 파일 생성 방지 ([NotebookLM, API, 날짜 빈파일 제거) |
 | v87 | 한글 깨짐 근본 해결 — macOS NFD→NFC 정규화 (파일명/내용 전체 적용) |
 | v88 | NFC 정규화 전수 적용 — build/sync 모든 파일 쓰기에 nfc() 함수 적용 |
+| v89 | 키워드 중첩 버그 수정 (LLM/GPT/RAG 제거), 빈 파일 생성 차단 |
+| v90 | 텔레그램 노션+Obsidian 메시지 통합, NFD→NFC 파일 24개 변환 |
+| v91 | sync_obsidian.py SyntaxError 수정 |
+| v92 | 텔레그램 저장 0개일 때도 Obsidian 결과 포함 |
+| v93 | 키워드 본문 치환 완전 제거 (빈파일 버그 원천 차단), pyc 캐시 삭제 |
 
 ---
 
