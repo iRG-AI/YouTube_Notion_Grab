@@ -736,10 +736,9 @@ async function main() {
     `📊 합계: 저장 ${fmtNum(totalSaved)}/ 스킵 ${fmtNum(totalSkip)}/ 오류 ${fmtNum(totalError)}`,
   ].join('\n');
 
-  await sendTelegram(msg);
   await sendEmail(`[YouTube 요약] 완료 - 저장 ${totalSaved}개`, msg);
 
-  // ── Obsidian 동기화 (항상 실행 - 결과를 노션 메시지에 포함) ──
+  // ── Obsidian 동기화 (항상 실행 - 노션+Obsidian 결과 합쳐서 1개 메시지 전송) ──
   log('\n🔄 Obsidian 동기화 시작...');
   const { execFile } = require('child_process');
   const python3 = '/opt/homebrew/bin/python3';
@@ -757,6 +756,7 @@ async function main() {
         const r = JSON.parse(jsonLine.replace('RESULT_JSON:', ''));
         const obsSection = [
           ``,
+          `━━━━━━━━━━━━━━━━━━━━━━`,
           `📓 Obsidian AI LLM Wiki`,
           `  • 신규 추가: ${r.added}개`,
           `  • Wiki 재구성: ${r.rebuilt ? '✅ 완료' : '⏭ 생략'}`,
