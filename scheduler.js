@@ -319,24 +319,35 @@ async function notionCall(method, apiPath, body) {
 
 // ── Notion DB 전체 캐시 로드 (재생목록 처리 전 1회만 호출) ──
 async function loadNotionCache() {
-  const cache = new Map(); // videoId → { pageId, title, topics, savedViewCount, savedSubscribers, savedDate }
+  const cache = new Map();
   let cursor = undefined;
   let total = 0;
+  let retryCount = 0;
+  const MAX_RETRY = 3;
   log('  📦 Notion DB 캐시 로딩 중...');
   do {
     const body = { page_size: 100 };
     if (cursor) body.start_cursor = cursor;
     const res = await notionCall('POST', `/v1/databases/${CONFIG.notionDbId}/query`, body);
-    if (res.status !== 200) break;
+    if (res.status !== 200) {
+      retryCount++;
+      log(`  ⚠️ Notion API 오류 (status ${res.status}), 재시도 ${retryCount}/${MAX_RETRY}...`);
+      if (retryCount >= MAX_RETRY) {
+        log(`  ❌ Notion 캐시 로딩 실패 — 재시도 횟수 초과`);
+        break;
+      }
+      await new Promise(r => setTimeout(r, 2000 * retryCount));
+      continue; // cursor 유지한 채 재시도
+    }
+    retryCount = 0; // 성공 시 재시도 카운터 초기화
     for (const page of (res.data?.results || [])) {
       const props = page.properties || {};
       const title = (props['영상 제목']?.title || []).map(t => t.text?.content || '').join('');
       const videoUrl = props['영상 URL']?.url || '';
-      // URL에서 videoId 추출
       const vidMatch = videoUrl.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
       const videoId = vidMatch ? vidMatch[1] : '';
       if (!videoId && !title) continue;
-      const key = videoId || title; // videoId 우선, 없으면 title
+      const key = videoId || title;
       if (!cache.has(key)) {
         const entry = {
           pageId:           page.id,
@@ -347,7 +358,6 @@ async function loadNotionCache() {
           savedDate:        props['업로드 일자']?.date?.start ?? null,
         };
         cache.set(key, entry);
-        // videoId가 있으면 title로도 등록 (이중 보호)
         if (videoId && title && !cache.has(title)) {
           cache.set(title, entry);
         }
@@ -355,6 +365,7 @@ async function loadNotionCache() {
     }
     total += res.data?.results?.length || 0;
     cursor = res.data?.next_cursor;
+    log(`  📦 캐시 진행: ${total}개 로드됨...`);
   } while (cursor);
   log(`  ✓ Notion DB 캐시 완료: ${total}개 페이지 로드`);
   return cache;
