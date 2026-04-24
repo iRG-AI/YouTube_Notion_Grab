@@ -374,6 +374,10 @@ python3 cleanup_duplicates.py
 | v91 | sync_obsidian.py SyntaxError 수정 |
 | v92 | 텔레그램 저장 0개일 때도 Obsidian 결과 포함 |
 | v93 | 키워드 본문 치환 완전 제거 (빈파일 버그 원천 차단), pyc 캐시 삭제 |
+| v94 | scheduler.js 닫힘 괄호 누락 수정 (SyntaxError 해결) |
+| v95 | 텔레그램 메시지 1개로 통합 (노션+구분선+Obsidian), 이중 전송 버그 수정 (scheduler 경로) |
+| v96 | Notion 캐시 로딩 재시도 로직 추가 (scheduler 경로, 300개 오류 방지), 진행상황 로깅 |
+| v97 | **웹 UI 중복 방지 강화** — ① `index.html` loadNotionCache 재시도 로직 이식 (부분 캐시로 인한 Notion 중복 저장 차단), ② `server.js` 화이트리스트에 `/v1/blocks/{id}/children` 추가 (100블록 초과 긴 요약 저장 가능), ③ 웹 UI 텔레그램 2중 전송 → 1회 통합 (Notion+구분선+Obsidian) |
 
 ---
 
