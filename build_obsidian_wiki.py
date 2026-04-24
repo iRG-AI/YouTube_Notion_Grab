@@ -207,7 +207,8 @@ def build_moc_files(files):
 # 2단계: 각 .md 파일에 키워드 링크 삽입
 # ══════════════════════════════════════════════
 def add_keyword_links(files):
-    """하단 관련 항목에 MOC 링크만 추가 (본문 키워드 치환 제거 - 빈 파일 생성 버그 원천 차단)"""
+    """하단 관련 항목에 MOC 링크 + 키워드 링크 추가 (본문 치환 제거 유지 - 빈 파일 버그 차단)"""
+    sorted_kw = sorted(KEYWORDS, key=len, reverse=True)
     updated = 0
     for f in files:
         content = f['content']
@@ -218,18 +219,33 @@ def add_keyword_links(files):
         # 기존 관련 항목 섹션 제거
         new_body = re.sub(r'\n\n---\n## 🔗 관련 항목\n[\s\S]*$', '', body)
 
-        # 하단에 MOC 링크만 추가
+        # 본문에서 매칭 키워드 찾기 (하단 섹션에만 링크 추가, 본문 치환 X)
+        matched_kws = []
+        for kw in sorted_kw:
+            alias = KEYWORD_ALIAS.get(kw, kw)
+            if re.search(re.escape(kw), new_body, re.IGNORECASE):
+                if alias not in matched_kws:
+                    matched_kws.append(alias)
+
+        # MOC 링크
         all_tags = f.get('tags', [f['folder']])
         valid_tags = [t for t in all_tags if t in VALID_NOTION_TAGS]
         if not valid_tags:
             valid_tags = [f['folder']]
         moc_links = ' '.join([f'[[{t} MOC]]' for t in valid_tags])
-        related = f'\n\n---\n## 🔗 관련 항목\n\n**재생목록**: {moc_links}\n'
+
+        # 키워드 링크 (매칭된 것만)
+        kw_section = ''
+        if matched_kws:
+            kw_links = ' '.join([f'[[{kw}]]' for kw in matched_kws])
+            kw_section = f'\n**키워드**: {kw_links}'
+
+        related = f'\n\n---\n## 🔗 관련 항목\n\n**재생목록**: {moc_links}{kw_section}\n'
 
         open(f['path'], 'w', encoding='utf-8').write(nfc(frontmatter + new_body + related))
         updated += 1
 
-    print(f"  ✅ {updated}개 파일 MOC 링크 삽입 완료")
+    print(f"  ✅ {updated}개 파일 MOC + 키워드 링크 삽입 완료")
 
 # ══════════════════════════════════════════════
 # 3단계: 키워드 인덱스 파일 생성
