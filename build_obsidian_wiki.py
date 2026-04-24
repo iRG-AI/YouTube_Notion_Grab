@@ -248,6 +248,33 @@ def add_keyword_links(files):
     print(f"  ✅ {updated}개 파일 MOC + 키워드 링크 삽입 완료")
 
 # ══════════════════════════════════════════════
+# 2.5단계: 키워드별 허브 파일 생성 (독립 노드 해소용)
+# ══════════════════════════════════════════════
+def build_keyword_hubs(files):
+    """키워드마다 _MOC/{keyword}.md 스텁 생성 → [[Claude]] 등 링크가 해결되어 그래프 엣지 생성"""
+    sorted_kw = sorted(KEYWORDS, key=len, reverse=True)
+    kw_map = defaultdict(list)
+    for f in files:
+        body = f['body']
+        for kw in sorted_kw:
+            alias = KEYWORD_ALIAS.get(kw, kw)
+            if re.search(re.escape(kw), body, re.IGNORECASE):
+                if f not in kw_map[alias]:
+                    kw_map[alias].append(f)
+
+    created = 0
+    for alias, kfiles in kw_map.items():
+        lines = [f'# {alias}\n\n']
+        lines.append(f'> 이 키워드를 언급한 영상 **{len(kfiles)}개**\n\n---\n\n')
+        for f in sorted(kfiles, key=lambda x: x['upload_date'], reverse=True):
+            date = str(f['upload_date'])[:10] if f['upload_date'] else ''
+            lines.append(f"- [[{f['filename']}|{f['title']}]] `{f['channel']}` {date}\n")
+        hub_path = os.path.join(MOC_DIR, nfc(f'{alias}.md'))
+        open(hub_path, 'w', encoding='utf-8').write(nfc(''.join(lines)))
+        created += 1
+    print(f"  ✅ 키워드 허브 {created}개 생성 (독립 노드 해소)")
+
+# ══════════════════════════════════════════════
 # 3단계: 키워드 인덱스 파일 생성
 # ══════════════════════════════════════════════
 def build_keyword_index(files):
@@ -404,6 +431,9 @@ if __name__ == '__main__':
 
     print('\n2️⃣  키워드 링크 삽입 중...')
     add_keyword_links(files)
+
+    print('\n2.5️⃣  키워드 허브 파일 생성 중...')
+    build_keyword_hubs(files)
 
     print('\n3️⃣  키워드 인덱스 생성 중...')
     # 변경된 파일 다시 읽기
