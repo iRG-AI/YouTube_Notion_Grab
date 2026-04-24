@@ -222,7 +222,7 @@ tail -f ~/Documents/Claude/Youtube_Notion_Grap/scheduler.log
 - **채널 구독자 병렬 조회**: `Promise.all`로 채널별 동시 조회
 - **Gemini 병렬 요약**: 신규 영상 3개씩 동시 처리
 - **스마트 Skip**: 중복 영상은 딜레이 없이 즉시 처리
-- **조회수/구독자 스마트 업데이트**: 20% 이상 변화 시만 Notion API 호출
+- **조회수/구독자 스마트 업데이트**: 15% 이상 변화 시만 Notion API 호출
 - **Obsidian 증분 동기화**: notion_id 기반으로 신규 영상만 추가 (전체 재생성 X)
 
 > 1,200개 영상 기준: 기존 2시간 37분 → **약 3~5분**으로 단축
@@ -379,6 +379,7 @@ python3 cleanup_duplicates.py
 | v96 | Notion 캐시 로딩 재시도 로직 추가 (scheduler 경로, 300개 오류 방지), 진행상황 로깅 |
 | v97 | **웹 UI 중복 방지 강화** — ① `index.html` loadNotionCache 재시도 로직 이식 (부분 캐시로 인한 Notion 중복 저장 차단), ② `server.js` 화이트리스트에 `/v1/blocks/{id}/children` 추가 (100블록 초과 긴 요약 저장 가능), ③ 웹 UI 텔레그램 2중 전송 → 1회 통합 (Notion+구분선+Obsidian) |
 | v98 | **Obsidian 그래프 독립 노드 해소** — `build_obsidian_wiki.py` 하단 "관련 항목"에 본문 매칭 키워드 링크 추가 (본문 치환 없이 안전하게). **조회수/구독자수 미업데이트 수정** — savedView가 null/0일 때 최초 채움 후 20% 임계값 적용 (scheduler.js + index.html 동일 수정) |
+| v99 | **조회수/구독자수 업데이트 임계값 완화** — 20% → 15% (실사용 변화율이 2~10% 구간이 많아 절충) (scheduler.js + index.html 동일 수정) |
 
 ---
 

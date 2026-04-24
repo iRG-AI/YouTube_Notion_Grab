@@ -576,19 +576,19 @@ async function processPlaylist(pl, notionCache) {
       const newViewCount = v.viewCount || 0;
       const newSubscribers = v.subscriberCount || 0;  // 숫자로 통일
       const newDate = v.publishedAt?.split('T')[0] || null;
-      // 조회수: savedView가 null/0이면 최초 채움, 그 외 20% 이상 변화 시만 업데이트
+      // 조회수: savedView가 null/0이면 최초 채움, 그 외 15% 이상 변화 시만 업데이트
       const savedView = dup.savedViewCount ?? null;
       const viewChanged = newViewCount > 0 && (
         savedView === null || savedView === 0
           ? true
-          : Math.abs(newViewCount - savedView) / savedView >= 0.2
+          : Math.abs(newViewCount - savedView) / savedView >= 0.15
       );
       // 구독자수: 동일 로직
       const savedSubs = dup.savedSubscribers ?? null;
       const subsChanged = newSubscribers > 0 && (
         savedSubs === null || savedSubs === 0
           ? true
-          : Math.abs(newSubscribers - savedSubs) / savedSubs >= 0.2
+          : Math.abs(newSubscribers - savedSubs) / savedSubs >= 0.15
       );
       const dateChanged = newDate && dup.savedDate && dup.savedDate !== newDate;
       if (viewChanged || subsChanged || dateChanged) {
