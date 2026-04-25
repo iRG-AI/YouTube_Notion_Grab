@@ -603,7 +603,10 @@ async function processMasterIngest(notionCache) {
   await Promise.all(uniqueChannels.map(async (chId) => { chCache[chId] = await getSubs(chId); }));
 
   let saved = 0, skip = 0, error = 0;
-  const newVideos = [];
+  const savedList  = [];   // [{title, topics, confidence}] — 저장된 영상 목록
+  const topicStats = {};   // {topicName: count} — 주제별 저장 건수
+  const skipList   = [];   // 스킵된 영상 제목 (최대 5개, 디버그용)
+  const newVideos  = [];
 
   // ── 1단계: 중복 체크 ──
   for (const v of videos) {
@@ -618,6 +621,7 @@ async function processMasterIngest(notionCache) {
 
     const dup = findDuplicate(v, notionCache);
     if (dup) {
+      if (skipList.length < 5) skipList.push(v.title || '(제목 없음)');
       skip++;
       log(`  ⏭ Skip (이미 저장됨): ${v.title?.slice(0, 50)}`);
     } else {
@@ -627,7 +631,7 @@ async function processMasterIngest(notionCache) {
 
   if (!newVideos.length) {
     log('  ✓ 신규 영상 없음');
-    return { saved, skip, error };
+    return { saved, skip, error, savedList, topicStats, skipList, totalInPlaylist: videos.length };
   }
 
   // ── 2단계: 신규 영상 — 요약 + 분류 + 저장 + YouTube 추가 ──
@@ -673,6 +677,12 @@ async function processMasterIngest(notionCache) {
           savedDate: v.publishedAt?.split('T')[0] || null,
         });
 
+        // 저장 통계 수집
+        savedList.push({ title: v.title, topics: allTopics, confidence: cls.confidence });
+        for (const t of topics) {
+          topicStats[t] = (topicStats[t] || 0) + 1;
+        }
+
         // YouTube 토픽 재생목록에 추가 (신뢰도 0.6+)
         if (cls.confidence >= 0.6 && topics.length > 0) {
           for (const topic of topics) {
@@ -681,7 +691,6 @@ async function processMasterIngest(notionCache) {
             try {
               if (!yt.checkQuotaAvailable(50)) {
                 log(`    ⏸  YouTube quota 한도 — ${topic} 재생목록 추가 보류`);
-                const { appendPending } = require('./migrate_classify');  // 공유 큐 (없으면 자체 파일)
                 continue;
               }
               await yt.addToPlaylist(pid, v.videoId);
@@ -701,7 +710,7 @@ async function processMasterIngest(notionCache) {
     if (i + PARALLEL < newVideos.length) await new Promise(r => setTimeout(r, 300));
   }
 
-  return { saved, skip, error };
+  return { saved, skip, error, savedList, topicStats, skipList, totalInPlaylist: videos.length };
 }
 
 // ── 재생목록 하나 처리 ──
@@ -945,10 +954,55 @@ async function main() {
 
   // ── 전체 완료 알림 전송 ──
   const now = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
-  const summaryLines = results.map(r =>
-    `• ${r.name}: 저장 ${fmtNum(r.saved)}/ 스킵 ${fmtNum(r.skip)}/ 오류 ${fmtNum(r.error)}`
-  ).join('\n');
+
+  // 마스터 모드: 주제별 분류 / 저장 영상 목록 포함한 상세 메시지
+  let summaryLines;
+  if (useMasterMode && results.length > 0) {
+    const r = results[0];
+    const inPlaylist = r.totalInPlaylist ?? (r.saved + r.skip + r.error);
+    const lines = [];
+
+    if (r.saved > 0) {
+      lines.push(`• AI 영상목록 (마스터): 재생목록 ${fmtNum(inPlaylist)}개 | 신규 저장 ${fmtNum(r.saved)}개 | 스킵 ${fmtNum(r.skip)}개`);
+
+      // 주제별 저장 건수
+      const topicEntries = Object.entries(r.topicStats || {}).sort((a, b) => b[1] - a[1]);
+      if (topicEntries.length) {
+        lines.push(`  🏷 주제별: ${topicEntries.map(([t, c]) => `${t}(${c})`).join(', ')}`);
+      }
+
+      // 저장된 영상 목록 (최대 5개)
+      const list = (r.savedList || []).slice(0, 5);
+      list.forEach((v, i) => {
+        const topicsStr = v.topics.filter(t => t !== 'AI 영상목록').join(', ') || '(분류 없음)';
+        const confMark = v.confidence < 0.6 ? ' ⚠️' : '';
+        lines.push(`  ${i + 1}. ${v.title.slice(0, 35)} → ${topicsStr}${confMark}`);
+      });
+      if ((r.savedList || []).length > 5) {
+        lines.push(`  … 외 ${r.savedList.length - 5}개`);
+      }
+    } else {
+      lines.push(`• AI 영상목록 (마스터): 재생목록 ${fmtNum(inPlaylist)}개 | 신규 없음`);
+      lines.push(`  ℹ️ ${fmtNum(r.skip)}개 모두 이미 Notion에 저장된 영상`);
+      // 스킵 예시 (최대 2개 — 실제로 어떤 영상인지 파악용)
+      const samples = (r.skipList || []).slice(0, 2).map(t => t.slice(0, 25));
+      if (samples.length) {
+        lines.push(`  예) ${samples.map(t => `"${t}"`).join(', ')} …`);
+      }
+    }
+    if (r.error > 0) lines.push(`  ❌ 오류 ${fmtNum(r.error)}개`);
+    summaryLines = lines.join('\n');
+  } else {
+    // 레거시 모드: 기존 형식
+    summaryLines = results.map(r =>
+      `• ${r.name}: 저장 ${fmtNum(r.saved)}/ 스킵 ${fmtNum(r.skip)}/ 오류 ${fmtNum(r.error)}`
+    ).join('\n');
+  }
   const elapsed = formatElapsed(Date.now() - startTime);
+  const totalLine = useMasterMode
+    ? `📊 합계: 신규 저장 ${fmtNum(totalSaved)}개 | 스킵 ${fmtNum(totalSkip)}개 | 오류 ${fmtNum(totalError)}개`
+    : `📊 합계: 저장 ${fmtNum(totalSaved)}/ 스킵 ${fmtNum(totalSkip)}/ 오류 ${fmtNum(totalError)}`;
+
   const msg = [
     `🎬 YouTube → Notion 요약 완료`,
     `📅 ${now}`,
@@ -956,7 +1010,7 @@ async function main() {
     ``,
     summaryLines,
     ``,
-    `📊 합계: 저장 ${fmtNum(totalSaved)}/ 스킵 ${fmtNum(totalSkip)}/ 오류 ${fmtNum(totalError)}`,
+    totalLine,
   ].join('\n');
 
   await sendEmail(`[YouTube 요약] 완료 - 저장 ${totalSaved}개`, msg);
