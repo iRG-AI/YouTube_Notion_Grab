@@ -5,6 +5,48 @@ YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하여 **Notion 
 
 ---
 
+## 🆕 최근 주요 변경사항 (v97 ~ v100)
+
+### v100 — Obsidian 그래프 독립 노드 본격 해소 (2026-04-24)
+**문제**: v98에서 영상 하단에 `[[Claude]]`, `[[Claude Code]]` 등 키워드 링크를 추가했으나 해당 이름의 실제 파일이 없어 **미해결(unresolved) 링크**로 남았습니다. Obsidian 그래프뷰에서 미해결 링크는 엣지를 약하게 표시하거나 숨기기 때문에, 영상 노드들이 MOC 하나에만 연결된 위성 클러스터처럼 보여 "독립 노드"로 인식되었습니다.
+
+**해결**: [build_obsidian_wiki.py](build_obsidian_wiki.py)에 `build_keyword_hubs()` 함수 추가.
+- `_MOC/Claude.md`, `_MOC/Claude Code.md`, `_MOC/Gemini.md` 등 **키워드별 허브 파일 27개 자동 생성**
+- 각 허브는 해당 키워드를 언급한 영상 목록(최신순, 채널명, 업로드 날짜 포함)을 담음
+- `[[Claude]]` 링크가 실제 파일로 해결 → 같은 키워드 언급 영상끼리 허브를 통해 그래프 엣지로 연결
+- 1,970개 영상 파일에서 미해결 링크가 해결되어 그래프 클러스터 밀도 대폭 개선
+
+### v99 — 조회수/구독자수 업데이트 임계값 완화 (2026-04-24)
+**문제**: v98에서 20% 임계값을 걸었으나 2,313개 영상 중 업데이트 0건. 실사용 변화율을 확인한 결과 대부분 2~10% 구간 (예: 7,531 → 8,168 = 8.5%)에 있어 20%는 과도한 필터였습니다.
+
+**해결**: 임계값 **20% → 15%**로 완화.
+- [scheduler.js:584,591](scheduler.js:584): `>= 0.2` → `>= 0.15`
+- [index.html:1379,1386](index.html:1379): `>= 0.2` → `>= 0.15` (웹 UI 동일 적용)
+- `savedView`가 `null`/`0`이면 최초 채움, 그 외에는 15% 이상 변화 시만 업데이트
+
+### v98 — Obsidian 그래프 1차 해소 + 통계 미업데이트 버그 수정
+**Obsidian**: [build_obsidian_wiki.py](build_obsidian_wiki.py)의 `add_keyword_links()`에 본문 매칭 키워드를 "관련 항목" 섹션에 추가. 본문 치환 없이 하단 섹션에만 링크 삽입 (v93의 빈 파일 버그 재발 방지).
+
+**통계 버그**: `savedView`가 `null`이거나 `0`일 때 임계값 검사가 `NaN` 또는 분모 0 문제를 일으켜 업데이트가 스킵되던 버그 수정. 최초 저장 영상도 정상적으로 채워지도록 로직 개선.
+
+### v97 — 웹 UI 중복 방지 강화 3종 세트
+1. **[index.html](index.html) `loadNotionCache` 재시도 로직 이식**
+   - 기존: 스케줄러 경로에만 있던 재시도 로직
+   - 변경: 웹 UI에도 동일 재시도(3회, 2초 간격) 적용
+   - 효과: 부분 캐시 로딩으로 인한 Notion 중복 저장 차단
+
+2. **[server.js](server.js) `ALLOWED_NOTION_PATHS`에 `/v1/blocks/{id}/children` 추가**
+   - 기존: 100블록 초과 긴 요약이 차단됨
+   - 변경: blocks append 엔드포인트를 화이트리스트에 추가
+   - 효과: 긴 요약(100블록 초과) 정상 저장 가능
+
+3. **웹 UI 텔레그램 2중 전송 → 1회 통합**
+   - 기존: Notion 결과 1통 + Obsidian 결과 1통 → 2회 전송
+   - 변경: [server.js](server.js) `/api/sync-obsidian`이 `notionMsg` body를 받아 `Notion + 구분선 + Obsidian` 단일 메시지로 통합 전송
+   - 효과: 스케줄러 경로(v95)와 동일 동작으로 통일
+
+---
+
 ## ⚡ Vibe Coding with AI
 
 본 프로젝트는 AI 에이전트 기술을 활용하여 구현 및 고도화되었습니다.
@@ -21,7 +63,7 @@ YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하여 **Notion 
 - 🤖 **Gemini AI 자동 요약** — 영상 제목·설명·태그 기반 4섹션 보고서 자동 생성
 - 📝 **Notion DB 자동 저장** — 요약 결과를 Notion 데이터베이스에 구조화하여 저장
 - 🔄 **스마트 중복 방지** — Notion 전체 캐시 로드 후 메모리에서 즉시 중복 체크
-- 📊 **통계 자동 업데이트** — 조회수(10% 이상 변화 시), 구독자수 변경 감지
+- 📊 **통계 자동 업데이트** — 조회수·구독자수 15% 이상 변화 시만 Notion API 호출
 - 📓 **Obsidian 자동 동기화** — 신규 저장 완료 시 Obsidian LLM Wiki 자동 업데이트
 - 🔗 **Wiki 링크 자동 구성** — 재생목록별 MOC, 채널별 목차, 키워드 링크 자동 생성
 - 📱 **텔레그램 알림** — 노션 저장 결과 + Obsidian 동기화 결과 통합 전송
@@ -222,7 +264,7 @@ tail -f ~/Documents/Claude/Youtube_Notion_Grap/scheduler.log
 - **채널 구독자 병렬 조회**: `Promise.all`로 채널별 동시 조회
 - **Gemini 병렬 요약**: 신규 영상 3개씩 동시 처리
 - **스마트 Skip**: 중복 영상은 딜레이 없이 즉시 처리
-- **조회수/구독자 스마트 업데이트**: 20% 이상 변화 시만 Notion API 호출
+- **조회수/구독자 스마트 업데이트**: 15% 이상 변화 시만 Notion API 호출
 - **Obsidian 증분 동기화**: notion_id 기반으로 신규 영상만 추가 (전체 재생성 X)
 
 > 1,200개 영상 기준: 기존 2시간 37분 → **약 3~5분**으로 단축
@@ -374,6 +416,13 @@ python3 cleanup_duplicates.py
 | v91 | sync_obsidian.py SyntaxError 수정 |
 | v92 | 텔레그램 저장 0개일 때도 Obsidian 결과 포함 |
 | v93 | 키워드 본문 치환 완전 제거 (빈파일 버그 원천 차단), pyc 캐시 삭제 |
+| v94 | scheduler.js 닫힘 괄호 누락 수정 (SyntaxError 해결) |
+| v95 | 텔레그램 메시지 1개로 통합 (노션+구분선+Obsidian), 이중 전송 버그 수정 (scheduler 경로) |
+| v96 | Notion 캐시 로딩 재시도 로직 추가 (scheduler 경로, 300개 오류 방지), 진행상황 로깅 |
+| v97 | **웹 UI 중복 방지 강화** — ① `index.html` loadNotionCache 재시도 로직 이식 (부분 캐시로 인한 Notion 중복 저장 차단), ② `server.js` 화이트리스트에 `/v1/blocks/{id}/children` 추가 (100블록 초과 긴 요약 저장 가능), ③ 웹 UI 텔레그램 2중 전송 → 1회 통합 (Notion+구분선+Obsidian) |
+| v98 | **Obsidian 그래프 독립 노드 해소** — `build_obsidian_wiki.py` 하단 "관련 항목"에 본문 매칭 키워드 링크 추가 (본문 치환 없이 안전하게). **조회수/구독자수 미업데이트 수정** — savedView가 null/0일 때 최초 채움 후 20% 임계값 적용 (scheduler.js + index.html 동일 수정) |
+| v99 | **조회수/구독자수 업데이트 임계값 완화** — 20% → 15% (실사용 변화율이 2~10% 구간이 많아 절충) (scheduler.js + index.html 동일 수정) |
+| v100 | **Obsidian 독립 노드 본격 해소** — `build_obsidian_wiki.py`에 `build_keyword_hubs()` 추가: 키워드별 허브 파일(`_MOC/Claude.md`, `Claude Code.md` 등) 자동 생성 → `[[Claude]]` 미해결 링크가 실제 파일로 해결되어 같은 키워드 언급 영상끼리 허브를 통해 연결됨 |
 
 ---
 
@@ -391,8 +440,6 @@ python3 cleanup_duplicates.py
 | 포트 | 프로그램 |
 |------|---------|
 | **3000** | YouTube → Notion AI 요약기 (이 프로그램) |
-| **3001** | 재무 데이터 자동 다운로드 및 엑셀 업데이트 |
-| **5173** | 아이리치그린 재무 대시보드 |
 
 ---
 

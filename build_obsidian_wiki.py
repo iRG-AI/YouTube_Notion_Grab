@@ -207,7 +207,8 @@ def build_moc_files(files):
 # 2단계: 각 .md 파일에 키워드 링크 삽입
 # ══════════════════════════════════════════════
 def add_keyword_links(files):
-    """하단 관련 항목에 MOC 링크만 추가 (본문 키워드 치환 제거 - 빈 파일 생성 버그 원천 차단)"""
+    """하단 관련 항목에 MOC 링크 + 키워드 링크 추가 (본문 치환 제거 유지 - 빈 파일 버그 차단)"""
+    sorted_kw = sorted(KEYWORDS, key=len, reverse=True)
     updated = 0
     for f in files:
         content = f['content']
@@ -218,18 +219,60 @@ def add_keyword_links(files):
         # 기존 관련 항목 섹션 제거
         new_body = re.sub(r'\n\n---\n## 🔗 관련 항목\n[\s\S]*$', '', body)
 
-        # 하단에 MOC 링크만 추가
+        # 본문에서 매칭 키워드 찾기 (하단 섹션에만 링크 추가, 본문 치환 X)
+        matched_kws = []
+        for kw in sorted_kw:
+            alias = KEYWORD_ALIAS.get(kw, kw)
+            if re.search(re.escape(kw), new_body, re.IGNORECASE):
+                if alias not in matched_kws:
+                    matched_kws.append(alias)
+
+        # MOC 링크
         all_tags = f.get('tags', [f['folder']])
         valid_tags = [t for t in all_tags if t in VALID_NOTION_TAGS]
         if not valid_tags:
             valid_tags = [f['folder']]
         moc_links = ' '.join([f'[[{t} MOC]]' for t in valid_tags])
-        related = f'\n\n---\n## 🔗 관련 항목\n\n**재생목록**: {moc_links}\n'
+
+        # 키워드 링크 (매칭된 것만)
+        kw_section = ''
+        if matched_kws:
+            kw_links = ' '.join([f'[[{kw}]]' for kw in matched_kws])
+            kw_section = f'\n**키워드**: {kw_links}'
+
+        related = f'\n\n---\n## 🔗 관련 항목\n\n**재생목록**: {moc_links}{kw_section}\n'
 
         open(f['path'], 'w', encoding='utf-8').write(nfc(frontmatter + new_body + related))
         updated += 1
 
-    print(f"  ✅ {updated}개 파일 MOC 링크 삽입 완료")
+    print(f"  ✅ {updated}개 파일 MOC + 키워드 링크 삽입 완료")
+
+# ══════════════════════════════════════════════
+# 2.5단계: 키워드별 허브 파일 생성 (독립 노드 해소용)
+# ══════════════════════════════════════════════
+def build_keyword_hubs(files):
+    """키워드마다 _MOC/{keyword}.md 스텁 생성 → [[Claude]] 등 링크가 해결되어 그래프 엣지 생성"""
+    sorted_kw = sorted(KEYWORDS, key=len, reverse=True)
+    kw_map = defaultdict(list)
+    for f in files:
+        body = f['body']
+        for kw in sorted_kw:
+            alias = KEYWORD_ALIAS.get(kw, kw)
+            if re.search(re.escape(kw), body, re.IGNORECASE):
+                if f not in kw_map[alias]:
+                    kw_map[alias].append(f)
+
+    created = 0
+    for alias, kfiles in kw_map.items():
+        lines = [f'# {alias}\n\n']
+        lines.append(f'> 이 키워드를 언급한 영상 **{len(kfiles)}개**\n\n---\n\n')
+        for f in sorted(kfiles, key=lambda x: x['upload_date'], reverse=True):
+            date = str(f['upload_date'])[:10] if f['upload_date'] else ''
+            lines.append(f"- [[{f['filename']}|{f['title']}]] `{f['channel']}` {date}\n")
+        hub_path = os.path.join(MOC_DIR, nfc(f'{alias}.md'))
+        open(hub_path, 'w', encoding='utf-8').write(nfc(''.join(lines)))
+        created += 1
+    print(f"  ✅ 키워드 허브 {created}개 생성 (독립 노드 해소)")
 
 # ══════════════════════════════════════════════
 # 3단계: 키워드 인덱스 파일 생성
@@ -388,6 +431,9 @@ if __name__ == '__main__':
 
     print('\n2️⃣  키워드 링크 삽입 중...')
     add_keyword_links(files)
+
+    print('\n2.5️⃣  키워드 허브 파일 생성 중...')
+    build_keyword_hubs(files)
 
     print('\n3️⃣  키워드 인덱스 생성 중...')
     # 변경된 파일 다시 읽기
