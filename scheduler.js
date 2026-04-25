@@ -352,7 +352,7 @@ async function loadNotionCache() {
         const entry = {
           pageId:           page.id,
           title:            title,
-          topics:           (props['주제']?.multi_select || []).map(t => t.name),
+          topics:           (props['주제']?.multi_select || []).map(t => (t.name || '').normalize('NFC')),
           savedViewCount:   props['조회수']?.number ?? null,
           savedSubscribers: props['구독자수']?.number ?? null,
           savedDate:        props['업로드 일자']?.date?.start ?? null,
@@ -380,8 +380,11 @@ function findDuplicate(video, cache) {
 
 // ── 기존 페이지에 주제(재생목록) 추가 ──
 async function addTopicToPage(pageId, newTopic, existingTopics) {
-  if (existingTopics.includes(newTopic)) return false;
-  const allTopics = [...existingTopics, newTopic];
+  // NFC 정규화 — 레거시 NFD 자모 분해 태그가 신규 NFC와 별개로 등록되는 것을 차단
+  const nfcNew = (newTopic || '').normalize('NFC');
+  const nfcExisting = (existingTopics || []).map(t => (t || '').normalize('NFC'));
+  if (nfcExisting.includes(nfcNew)) return false;
+  const allTopics = [...new Set([...nfcExisting, nfcNew])];
   const res = await notionCall('PATCH', `/v1/pages/${pageId}`, {
     properties: {
       '주제': { multi_select: allTopics.map(t => ({ name: t })) }
@@ -494,7 +497,7 @@ async function saveToNotion(v, summary, playlistTitle) {
       '영상 URL': { url: `https://www.youtube.com/watch?v=${v.videoId}` },
       '썸네일 URL': { url: thumbUrl },
       '처리 상태': { select: { name: '완료' } },
-      '주제': { multi_select: playlistTitle ? [{ name: playlistTitle }] : [] },
+      '주제': { multi_select: playlistTitle ? [{ name: playlistTitle.normalize('NFC') }] : [] },
     },
     children: buildBlocks(summary, thumbUrl, v),
   };
@@ -529,7 +532,7 @@ async function processPlaylist(pl, notionCache) {
 
   log(`\n▶ [${pl.name}] 재생목록 조회 중...`);
   // YouTube API 제목 대신 playlists.json의 name 사용 (이모지 깨짐 방지)
-  const playlistTitle = pl.name;
+  const playlistTitle = (pl.name || '').normalize('NFC');
   log(`  재생목록명: "${playlistTitle}"`);
 
   const videos = await getVideos(listId);

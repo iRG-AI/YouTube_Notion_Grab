@@ -423,6 +423,7 @@ python3 cleanup_duplicates.py
 | v98 | **Obsidian 그래프 독립 노드 해소** — `build_obsidian_wiki.py` 하단 "관련 항목"에 본문 매칭 키워드 링크 추가 (본문 치환 없이 안전하게). **조회수/구독자수 미업데이트 수정** — savedView가 null/0일 때 최초 채움 후 20% 임계값 적용 (scheduler.js + index.html 동일 수정) |
 | v99 | **조회수/구독자수 업데이트 임계값 완화** — 20% → 15% (실사용 변화율이 2~10% 구간이 많아 절충) (scheduler.js + index.html 동일 수정) |
 | v100 | **Obsidian 독립 노드 본격 해소** — `build_obsidian_wiki.py`에 `build_keyword_hubs()` 추가: 키워드별 허브 파일(`_MOC/Claude.md`, `Claude Code.md` 등) 자동 생성 → `[[Claude]]` 미해결 링크가 실제 파일로 해결되어 같은 키워드 언급 영상끼리 허브를 통해 연결됨 |
+| v101 | **Notion 주제 태그 한글 깨짐 차단** — `addTopicToPage` / 캐시 읽기 / 신규 페이지 작성 모든 경로에 `.normalize('NFC')` 적용 (scheduler.js + index.html). 일회성 정리 스크립트 `fix_nfc_topics.js` 추가 — DB 옵션 풀에 잔존하던 U+FFFD 깨진 옵션 2종("AI 바이브코��", "AI 노트��� LM") 제거 (옵션 35→33) |
 
 ---
 

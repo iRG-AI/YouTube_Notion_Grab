@@ -1010,7 +1010,7 @@
           const entry = {
             pageId:           page.id,
             title:            title,
-            topics:           (props['주제']?.multi_select || []).map(t => t.name),
+            topics:           (props['주제']?.multi_select || []).map(t => (t.name || '').normalize('NFC')),
             savedViewCount:   props['조회수']?.number ?? null,
             savedSubscribers: props['구독자수']?.number ?? null,
             savedDate:        props['업로드 일자']?.date?.start ?? null,
@@ -1048,7 +1048,7 @@
     const page = d.results[0];
     const props = page.properties || {};
     // 주제 목록
-    const topics = (props['주제']?.multi_select || []).map(t => t.name);
+    const topics = (props['주제']?.multi_select || []).map(t => (t.name || '').normalize('NFC'));
     // 기존 조회수·구독자수
     const savedViewCount   = props['조회수']?.number ?? null;
     const savedSubscribers = props['구독자수']?.number ?? null;
@@ -1058,9 +1058,11 @@
 
   // ===== 기존 Notion 페이지에 주제(재생목록) 추가 =====
   async function addTopicToPage(pageId, newTopic, existingTopics, token) {
-    // 이미 같은 주제가 있으면 패스
-    if (existingTopics.includes(newTopic)) return false;
-    const allTopics = [...existingTopics, newTopic];
+    // NFC 정규화 — 레거시 NFD 자모 분해 태그가 신규 NFC와 별개로 등록되는 것을 차단
+    const nfcNew = (newTopic || '').normalize('NFC');
+    const nfcExisting = (existingTopics || []).map(t => (t || '').normalize('NFC'));
+    if (nfcExisting.includes(nfcNew)) return false;
+    const allTopics = [...new Set([...nfcExisting, nfcNew])];
     const res = await fetch(`/notion-proxy/v1/pages/${pageId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', 'x-notion-token': token },
@@ -1194,7 +1196,7 @@
         '구독자수': { number: v.subscriberCount || 0 },
         '영상 URL': { url: `https://www.youtube.com/watch?v=${v.videoId}` },
         '처리 상태': { select: { name: '완료' } },
-        '주제': { multi_select: playlistTitle ? [{ name: playlistTitle }] : [] },
+        '주제': { multi_select: playlistTitle ? [{ name: playlistTitle.normalize('NFC') }] : [] },
       },
       // 페이지 본문 블록 생성 (보고서 형태로 파싱)
       children: buildBlocks(summary, thumbUrl, v)
@@ -1304,7 +1306,7 @@
     prog(0, 1, '재생목록 불러오는 중...');
 
     // playlists.json의 name 사용 (이모지 깨짐 방지), 없으면 YouTube API 제목 사용
-    const playlistTitle = plName || await getPlaylistTitle(pid, ytKey);
+    const playlistTitle = (plName || await getPlaylistTitle(pid, ytKey) || '').normalize('NFC');
     log(`✓ 재생목록: "${playlistTitle}"`, 'success');
 
     const videos = await getVideos(pid, ytKey);
