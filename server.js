@@ -272,6 +272,59 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ── AI 영상목록 마스터 인제스트 (SSE 스트리밍) ──
+  if (parsedUrl.pathname === '/api/master-ingest' && req.method === 'POST') {
+    res.writeHead(200, {
+      ...CORS,
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    const send = (msg) => {
+      try { res.write(`data: ${JSON.stringify({ msg })}\n\n`); } catch {}
+    };
+    const done = (stats) => {
+      try { res.write(`data: ${JSON.stringify({ done: true, stats })}\n\n`); res.end(); } catch {}
+    };
+
+    send('🚀 AI 영상목록 마스터 인제스트 시작...');
+
+    const { spawn } = require('child_process');
+    const child = spawn(process.execPath, [require('path').join(__dirname, 'scheduler.js')], {
+      cwd: __dirname,
+      env: { ...process.env },
+    });
+
+    let output = '';
+    child.stdout.on('data', (d) => {
+      const text = d.toString();
+      output += text;
+      for (const line of text.split('\n')) {
+        const clean = line.replace(/^\[.*?\]\s*/, '').trim();
+        if (clean) send(clean);
+      }
+    });
+    child.stderr.on('data', (d) => send('⚠️ ' + d.toString().trim()));
+
+    child.on('close', (code) => {
+      // 통계 파싱
+      const savedM  = output.match(/저장:\s*([\d,]+)개/);
+      const skipM   = output.match(/Skip:\s*([\d,]+)개/);
+      const errorM  = output.match(/오류:\s*([\d,]+)개/);
+      done({
+        saved: parseInt((savedM?.[1] || '0').replace(/,/g, ''), 10),
+        skip:  parseInt((skipM?.[1]  || '0').replace(/,/g, ''), 10),
+        error: parseInt((errorM?.[1] || '0').replace(/,/g, ''), 10),
+        code,
+      });
+    });
+
+    req.on('close', () => { try { child.kill(); } catch {} });
+    return;
+  }
+
   // ── HTML 서빙 ──
   if (parsedUrl.pathname === '/' || parsedUrl.pathname === '/index.html') {
     fs.readFile(path.join(__dirname, 'index.html'), (err, data) => {

@@ -533,6 +533,11 @@
         <span id="btnTxt">▶ 선택 실행</span>
       </button>
       <button class="btn btn-ghost" id="stopBtn" onclick="stop()" disabled>■ 중지</button>
+      <button class="btn" id="masterBtn" onclick="startMasterIngest()"
+        style="background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;color:#fff;padding:10px 18px;border-radius:8px;font-weight:600;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px;"
+        title="AI 영상목록에 추가된 영상을 자동 분류 → Notion 저장 → YouTube 재생목록 추가">
+        <span id="masterBtnTxt">🆕 AI 영상목록 처리</span>
+      </button>
       <span id="runStatusTxt" style="font-size:12px;color:var(--text-secondary);">선택된 재생목록을 순서대로 처리합니다</span>
     </div>
   </div>
@@ -1856,6 +1861,76 @@
       running = false;
       $('startBtn').disabled = false;
       $('btnTxt').textContent = '▶ 선택 실행';
+      $('stopBtn').disabled = true;
+      updateCheckHeader();
+    }
+  }
+
+  // ===== AI 영상목록 마스터 인제스트 =====
+  async function startMasterIngest() {
+    if (running) { alert('이미 실행 중입니다.'); return; }
+    running = true;
+
+    const masterBtn = $('masterBtn');
+    const masterBtnTxt = $('masterBtnTxt');
+    masterBtn.disabled = true;
+    masterBtnTxt.innerHTML = '<span class="spinner"></span> 처리 중...';
+    $('startBtn').disabled = true;
+    $('stopBtn').disabled = false;
+    $('progSec').classList.add('visible');
+    $('resSec').classList.add('visible');
+    $('progLog').innerHTML = '';
+    $('resTbl').innerHTML = '';
+    $('resStat').innerHTML = '총 <span>0</span>개 완료';
+
+    const chEl = $('progChannel');
+    const chName = $('progChannelName');
+    chEl.style.display = 'block';
+    chName.textContent = 'AI 영상목록 자동 분류 중...';
+
+    log('🆕 AI 영상목록 마스터 인제스트 시작...', 'info');
+    log('  영상 요약 → 토픽 자동 분류 → Notion 저장 → YouTube 재생목록 추가', 'info');
+
+    const startTime = Date.now();
+    try {
+      const res = await fetch('/api/master-ingest', { method: 'POST' });
+      if (!res.ok) throw new Error(`서버 오류: ${res.status}`);
+
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split('\n');
+        buf = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue;
+          try {
+            const payload = JSON.parse(line.slice(5).trim());
+            if (payload.done) {
+              const s = payload.stats || {};
+              const elapsed = formatElapsed(Date.now() - startTime);
+              log(`\n🎉 완료! 저장: ${s.saved}개 / Skip: ${s.skip}개 / 오류: ${s.error}개 / ${elapsed}`, 'success');
+              $('resStat').innerHTML = `총 <span>${s.saved}</span>개 완료 <span style="font-size:12px;color:var(--text-secondary);font-weight:400;">⏱ ${elapsed}</span>`;
+            } else if (payload.msg) {
+              const m = payload.msg;
+              const type = m.includes('❌') ? 'error' : m.includes('✓') || m.includes('🎉') ? 'success' : m.includes('⚠️') ? 'warn' : 'info';
+              log(m, type);
+            }
+          } catch {}
+        }
+        if (doStop) { reader.cancel(); break; }
+      }
+    } catch (e) {
+      log(`❌ 오류: ${e.message}`, 'error');
+    } finally {
+      running = false;
+      masterBtn.disabled = false;
+      masterBtnTxt.textContent = '🆕 AI 영상목록 처리';
+      $('startBtn').disabled = false;
       $('stopBtn').disabled = true;
       updateCheckHeader();
     }

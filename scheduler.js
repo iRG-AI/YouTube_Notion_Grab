@@ -26,10 +26,11 @@ function loadEnv() {
 loadEnv();
 
 const CONFIG = {
-  youtubeApiKey:  process.env.YOUTUBE_API_KEY  || '',
-  geminiApiKey:   process.env.GEMINI_API_KEY   || '',
-  notionToken:    process.env.NOTION_TOKEN      || '',
-  notionDbId:     process.env.NOTION_DB_ID      || '',
+  youtubeApiKey:        process.env.YOUTUBE_API_KEY             || '',
+  geminiApiKey:         process.env.GEMINI_API_KEY              || '',
+  notionToken:          process.env.NOTION_TOKEN                || '',
+  notionDbId:           process.env.NOTION_DB_ID                || '',
+  masterPlaylistId:     process.env.YOUTUBE_MASTER_PLAYLIST_ID  || '',
 
   telegram: {
     enabled:  process.env.TELEGRAM_ENABLED === 'true',
@@ -524,6 +525,185 @@ async function saveToNotion(v, summary, playlistTitle) {
   return res.data;
 }
 
+// ── Notion 저장 (다중 토픽 지원) ──
+async function saveToNotionWithTopics(v, summary, topics) {
+  const date = v.publishedAt?.split('T')[0] || null;
+  const thumbUrl = v.thumbnail || `https://img.youtube.com/vi/${v.videoId}/hqdefault.jpg`;
+  const nfcTopics = [...new Set((topics || []).map(t => (t || '').normalize('NFC')))].filter(Boolean);
+
+  const body = {
+    parent: { database_id: CONFIG.notionDbId },
+    cover: { type: 'external', external: { url: thumbUrl } },
+    properties: {
+      '영상 제목': { title: [{ text: { content: v.title || '' } }] },
+      '요약 내용': { rich_text: splitRichText(summary || '') },
+      '유튜브 채널': { rich_text: [{ text: { content: v.channelTitle || '' } }] },
+      '조회수': { number: v.viewCount || 0 },
+      '구독자수': { number: v.subscriberCount || 0 },
+      '영상 URL': { url: `https://www.youtube.com/watch?v=${v.videoId}` },
+      '썸네일 URL': { url: thumbUrl },
+      '처리 상태': { select: { name: '완료' } },
+      '주제': { multi_select: nfcTopics.map(name => ({ name })) },
+    },
+    children: buildBlocks(summary, thumbUrl, v),
+  };
+  if (date) body.properties['업로드 일자'] = { date: { start: date } };
+
+  const allBlocks = body.children;
+  body.children = allBlocks.slice(0, 100);
+  const res = await notionCall('POST', '/v1/pages', body);
+  if (res.status !== 200) throw new Error(`Notion 저장 오류 ${res.status}: ${JSON.stringify(res.data)}`);
+  const pageId = res.data.id;
+  for (let i = 100; i < allBlocks.length; i += 100) {
+    const chunk = allBlocks.slice(i, i + 100);
+    await notionCall('PATCH', `/v1/blocks/${pageId}/children`, { children: chunk });
+  }
+  return res.data;
+}
+
+// ── AI 영상목록 → 자동 분류 + Notion 저장 + 토픽 재생목록 추가 ──
+async function processMasterIngest(notionCache) {
+  const masterId = CONFIG.masterPlaylistId;
+  if (!masterId) {
+    log('⚠️  YOUTUBE_MASTER_PLAYLIST_ID 미설정 — 마스터 인제스트 건너뜀');
+    return { saved: 0, skip: 0, error: 0 };
+  }
+
+  // lib 모듈 lazy-load (선택적 기능, 없어도 레거시 동작)
+  let yt, classifier;
+  try {
+    yt = require('./lib/youtube_oauth');
+    classifier = require('./lib/classifier');
+  } catch (e) {
+    log('⚠️  lib/youtube_oauth 또는 lib/classifier 로드 실패 — 마스터 인제스트 건너뜀: ' + e.message);
+    return { saved: 0, skip: 0, error: 0 };
+  }
+
+  // playlists.json에서 토픽 → playlistId 매핑 구성
+  const playlists = loadPlaylists();
+  const topicToPlaylistId = {};
+  for (const pl of playlists) {
+    const m = pl.url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
+    if (m && pl.name) topicToPlaylistId[(pl.name || '').normalize('NFC')] = m[1];
+  }
+  const availableTopics = Object.keys(topicToPlaylistId);
+
+  log(`\n▶ [AI 영상목록] 마스터 인제스트 시작...`);
+  log(`  📚 분류 가능 토픽: ${availableTopics.length}개`);
+
+  const videos = await getVideos(masterId);
+  log(`  총 ${fmtNum(videos.length)}개 동영상`);
+  if (!videos.length) return { saved: 0, skip: 0, error: 0 };
+
+  log(`  🔄 YouTube 상세 정보 조회 중...`);
+  const detailMap = await getBatchDetails(videos.map(v => v.videoId));
+
+  const chCache = {};
+  const uniqueChannels = [...new Set(videos.map(v => detailMap[v.videoId]?.realChannelId || v.channelId).filter(Boolean))];
+  await Promise.all(uniqueChannels.map(async (chId) => { chCache[chId] = await getSubs(chId); }));
+
+  let saved = 0, skip = 0, error = 0;
+  const newVideos = [];
+
+  // ── 1단계: 중복 체크 ──
+  for (const v of videos) {
+    const det = detailMap[v.videoId];
+    if (det) {
+      v.viewCount = det.viewCount; v.description = det.description; v.tags = det.tags;
+      if (det.realChannelTitle) v.channelTitle = det.realChannelTitle;
+      if (det.realChannelId)    v.channelId    = det.realChannelId;
+      if (det.realPublishedAt)  v.publishedAt  = det.realPublishedAt;
+    }
+    v.subscriberCount = chCache[v.channelId] || 0;
+
+    const dup = findDuplicate(v, notionCache);
+    if (dup) {
+      skip++;
+      log(`  ⏭ Skip (이미 저장됨): ${v.title?.slice(0, 50)}`);
+    } else {
+      newVideos.push(v);
+    }
+  }
+
+  if (!newVideos.length) {
+    log('  ✓ 신규 영상 없음');
+    return { saved, skip, error };
+  }
+
+  // ── 2단계: 신규 영상 — 요약 + 분류 + 저장 + YouTube 추가 ──
+  log(`\n  ⚡ 신규 ${newVideos.length}개 처리 시작...`);
+  const PARALLEL = 3;
+
+  for (let i = 0; i < newVideos.length; i += PARALLEL) {
+    const batch = newVideos.slice(i, i + PARALLEL);
+    log(`  ⚡ [${i+1}~${Math.min(i+PARALLEL, newVideos.length)}/${newVideos.length}] 병렬 요약 중...`);
+
+    const summaryResults = await Promise.allSettled(batch.map(v => geminiSummarize(v)));
+
+    for (let j = 0; j < batch.length; j++) {
+      const v = batch[j];
+      const sRes = summaryResults[j];
+      try {
+        if (sRes.status === 'rejected') throw new Error(sRes.reason?.message || '요약 실패');
+        const summary = sRes.value;
+
+        // 분류
+        const cls = await classifier.classifyTopics(
+          { summary, title: v.title, channel: v.channelTitle },
+          availableTopics
+        );
+        const topics = cls.topics;  // 분류된 토픽들
+        const allTopics = ['AI 영상목록', ...topics];  // 마스터 + 분류 토픽
+
+        const confStr = `conf=${cls.confidence.toFixed(2)}`;
+        log(`    🏷  분류: [${topics.join(', ')}] (${confStr})`);
+        if (cls.confidence < 0.6) {
+          log(`    ⚠️  신뢰도 낮음 — 주제 저장은 하되 수동 검토 권장`);
+        }
+
+        // Notion 저장
+        const notionPage = await saveToNotionWithTopics(v, summary, allTopics);
+        const pageId = notionPage.id;
+        log(`    ✓ Notion 저장 완료 (주제: ${allTopics.join(', ')})`);
+
+        // notionCache 갱신
+        notionCache.set(v.videoId || v.title, {
+          pageId, title: v.title, topics: allTopics,
+          savedViewCount: v.viewCount, savedSubscribers: v.subscriberCount,
+          savedDate: v.publishedAt?.split('T')[0] || null,
+        });
+
+        // YouTube 토픽 재생목록에 추가 (신뢰도 0.6+)
+        if (cls.confidence >= 0.6 && topics.length > 0) {
+          for (const topic of topics) {
+            const pid = topicToPlaylistId[topic];
+            if (!pid) continue;
+            try {
+              if (!yt.checkQuotaAvailable(50)) {
+                log(`    ⏸  YouTube quota 한도 — ${topic} 재생목록 추가 보류`);
+                const { appendPending } = require('./migrate_classify');  // 공유 큐 (없으면 자체 파일)
+                continue;
+              }
+              await yt.addToPlaylist(pid, v.videoId);
+              log(`    ✓ YouTube [${topic}] 재생목록 추가`);
+            } catch (ytErr) {
+              log(`    ⚠️  YouTube [${topic}] 추가 실패: ${ytErr.message?.slice(0, 80)}`);
+            }
+          }
+        }
+
+        saved++;
+      } catch (e) {
+        log(`    ❌ 오류 (${v.title?.slice(0, 30)}): ${e.message}`);
+        error++;
+      }
+    }
+    if (i + PARALLEL < newVideos.length) await new Promise(r => setTimeout(r, 300));
+  }
+
+  return { saved, skip, error };
+}
+
 // ── 재생목록 하나 처리 ──
 async function processPlaylist(pl, notionCache) {
   const m = pl.url.match(/[?&]list=([a-zA-Z0-9_-]+)/);
@@ -703,31 +883,54 @@ async function main() {
   }
 
   const playlists = loadPlaylists();
-  if (!playlists.length) {
+  const LEGACY_MODE = process.argv.includes('--legacy');
+  const useMasterMode = CONFIG.masterPlaylistId && !LEGACY_MODE;
+
+  if (!playlists.length && !useMasterMode) {
     log('⚠️  처리할 재생목록이 없습니다. 브라우저에서 먼저 등록하세요.');
     process.exit(0);
   }
 
-  log(`📋 총 ${playlists.length}개 재생목록 처리 시작`);
+  if (useMasterMode) {
+    log(`🆕 마스터 인제스트 모드 — "AI 영상목록" 기반 자동 분류`);
+    log(`   (레거시 33개 재생목록 모드: node scheduler.js --legacy)`);
+  } else {
+    log(`📋 레거시 모드 — 총 ${playlists.length}개 재생목록 처리`);
+  }
 
-  // ── Notion DB 전체 캐시 로드 (API 호출 대폭 감소) ──
+  // ── Notion DB 전체 캐시 로드 ──
   const notionCache = await loadNotionCache();
 
   let totalSaved = 0, totalSkip = 0, totalError = 0;
-  const results = [];  // 재생목록별 결과 (알림용)
+  const results = [];
 
-  for (let i = 0; i < playlists.length; i++) {
-    const pl = playlists[i];
-    log(`\n━━━ [${i+1}/${playlists.length}] ${pl.name} ━━━`);
+  if (useMasterMode) {
+    // ── 신규 워크플로: AI 영상목록 → 자동 분류 ──
     try {
-      const result = await processPlaylist(pl, notionCache);
+      const result = await processMasterIngest(notionCache);
       totalSaved += result.saved;
       totalSkip += result.skip;
       totalError += result.error;
-      results.push({ name: pl.name, ...result });
+      results.push({ name: 'AI 영상목록 (마스터)', ...result });
     } catch (e) {
-      log(`❌ 재생목록 처리 중 오류: ${e.message}`);
-      results.push({ name: pl.name, saved: 0, skip: 0, error: 1 });
+      log(`❌ 마스터 인제스트 오류: ${e.message}`);
+      results.push({ name: 'AI 영상목록 (마스터)', saved: 0, skip: 0, error: 1 });
+    }
+  } else {
+    // ── 레거시 워크플로: 33개 토픽 재생목록 순회 ──
+    for (let i = 0; i < playlists.length; i++) {
+      const pl = playlists[i];
+      log(`\n━━━ [${i+1}/${playlists.length}] ${pl.name} ━━━`);
+      try {
+        const result = await processPlaylist(pl, notionCache);
+        totalSaved += result.saved;
+        totalSkip += result.skip;
+        totalError += result.error;
+        results.push({ name: pl.name, ...result });
+      } catch (e) {
+        log(`❌ 재생목록 처리 중 오류: ${e.message}`);
+        results.push({ name: pl.name, saved: 0, skip: 0, error: 1 });
+      }
     }
   }
 
