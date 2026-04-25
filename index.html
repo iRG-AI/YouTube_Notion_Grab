@@ -1915,6 +1915,13 @@
               const elapsed = formatElapsed(Date.now() - startTime);
               log(`\n🎉 완료! 저장: ${s.saved}개 / Skip: ${s.skip}개 / 오류: ${s.error}개 / ${elapsed}`, 'success');
               $('resStat').innerHTML = `총 <span>${s.saved}</span>개 완료 <span style="font-size:12px;color:var(--text-secondary);font-weight:400;">⏱ ${elapsed}</span>`;
+              // ── 진행률 UI를 완료 상태로 업데이트 ──
+              $('progPct').textContent = '완료';
+              $('progLabel').textContent = `저장 ${s.saved}개 · 스킵 ${s.skip}개`;
+              $('progBar').style.width = '100%';
+              $('progFrac').textContent = '';
+              $('progChannelName').textContent = '✅ AI 영상목록 처리 완료';
+              $('progChannel').style.borderBottomColor = 'var(--accent-green)';
             } else if (payload.msg) {
               const m = payload.msg;
               const type = m.includes('❌') ? 'error' : m.includes('✓') || m.includes('🎉') ? 'success' : m.includes('⚠️') ? 'warn' : 'info';
@@ -1926,6 +1933,9 @@
       }
     } catch (e) {
       log(`❌ 오류: ${e.message}`, 'error');
+      $('progPct').textContent = '오류';
+      $('progLabel').textContent = e.message.slice(0, 40);
+      $('progChannelName').textContent = '❌ 처리 중 오류 발생';
     } finally {
       running = false;
       masterBtn.disabled = false;

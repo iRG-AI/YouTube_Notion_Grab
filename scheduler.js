@@ -685,18 +685,29 @@ async function processMasterIngest(notionCache) {
 
         // YouTube 토픽 재생목록에 추가 (신뢰도 0.6+)
         if (cls.confidence >= 0.6 && topics.length > 0) {
+          // pending 큐 헬퍼 (migrate_classify.js와 동일한 파일 공유)
+          const PENDING_PATH = path.join(__dirname, 'pending_playlist_adds.json');
+          const appendPending = (entry) => {
+            let q = [];
+            try { q = JSON.parse(fs.readFileSync(PENDING_PATH, 'utf-8')); } catch {}
+            q.push({ ...entry, ts: new Date().toISOString() });
+            fs.writeFileSync(PENDING_PATH, JSON.stringify(q, null, 2));
+          };
+
           for (const topic of topics) {
             const pid = topicToPlaylistId[topic];
             if (!pid) continue;
             try {
               if (!yt.checkQuotaAvailable(50)) {
-                log(`    ⏸  YouTube quota 한도 — ${topic} 재생목록 추가 보류`);
+                log(`    ⏸  YouTube quota 한도 — [${topic}] 보류 (pending 큐 적재)`);
+                appendPending({ playlistId: pid, topic, videoId: v.videoId, title: v.title });
                 continue;
               }
               await yt.addToPlaylist(pid, v.videoId);
               log(`    ✓ YouTube [${topic}] 재생목록 추가`);
             } catch (ytErr) {
               log(`    ⚠️  YouTube [${topic}] 추가 실패: ${ytErr.message?.slice(0, 80)}`);
+              appendPending({ playlistId: pid, topic, videoId: v.videoId, title: v.title, reason: ytErr.message });
             }
           }
         }
