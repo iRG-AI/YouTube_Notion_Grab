@@ -5,7 +5,57 @@ YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하여 **Notion 
 
 ---
 
-## 🆕 최근 주요 변경사항 (v97 ~ v100)
+## 🆕 최근 주요 변경사항 (v102)
+
+### v102 — AI 영상목록 마스터 인제스트 (2026-04-25)
+**목표**: 사용자가 영상을 분류 없이 "AI 영상목록" 하나에만 넣으면 자동으로 분류 → 저장 → 재생목록 추가까지 처리.
+
+**새로운 워크플로**:
+```
+"AI 영상목록"에 영상 추가
+       ↓
+ Gemini AI 요약 + 토픽 자동 분류 (0~5개)
+       ↓
+ Notion DB 저장 (다중 주제 태그)
+       ↓
+ YouTube 토픽 재생목록에 자동 추가 (OAuth)
+```
+
+**신규 파일**:
+- [`lib/youtube_oauth.js`](lib/youtube_oauth.js): YouTube OAuth 2.0 + `playlistItems.insert` API (access_token 캐시, 일일 quota 추적, rate limit)
+- [`lib/classifier.js`](lib/classifier.js): Gemini 기반 토픽 분류기 (상한 5개, 추상 토픽 과추천 방지, 제목 우선 신호, NFC 정규화)
+- [`migrate_classify.js`](migrate_classify.js): 기존 1,518개 영상 일괄 재분류 스크립트 (`--dry-run` / `--notion-only` / `--youtube-only` / `--apply` 모드, state file 기반 재개)
+- [`oauth_setup.js`](oauth_setup.js): YouTube OAuth 2.0 refresh_token 1회 발급 도구 (PKCE + 로컬 콜백 서버)
+
+**수정**:
+- [`scheduler.js`](scheduler.js): `processMasterIngest()` + `saveToNotionWithTopics()` 추가. `YOUTUBE_MASTER_PLAYLIST_ID` 설정 시 자동으로 마스터 모드 진입 (`--legacy` 플래그로 기존 33개 재생목록 모드 유지)
+- [`server.js`](server.js): `/api/master-ingest` SSE 엔드포인트 추가 (scheduler 실시간 스트리밍)
+- [`index.html`](index.html): "🆕 AI 영상목록 처리" 버튼 + `startMasterIngest()` 함수 추가
+
+**환경 변수 추가** (`.env`):
+```env
+YOUTUBE_OAUTH_CLIENT_ID=...
+YOUTUBE_OAUTH_CLIENT_SECRET=...
+YOUTUBE_OAUTH_REFRESH_TOKEN=...
+YOUTUBE_MASTER_PLAYLIST_ID=PLnDn1H0jzj2g...
+```
+
+**사용법**:
+```bash
+# 웹 UI → "🆕 AI 영상목록 처리" 버튼 클릭 (SSE 실시간 로그)
+# 또는 스케줄러 자동 실행 (6시간 주기, 마스터 모드 우선)
+node scheduler.js              # 마스터 인제스트 모드
+node scheduler.js --legacy     # 레거시 33개 재생목록 모드
+
+# 기존 영상 일괄 마이그레이션
+node migrate_classify.js --dry-run --limit=20      # 미리보기
+node migrate_classify.js --notion-only             # Notion 태그만 보완 (1회성)
+node migrate_classify.js --youtube-only --resume   # YouTube 추가 (매일 분할)
+```
+
+---
+
+## 🆕 이전 주요 변경사항 (v97 ~ v101)
 
 ### v100 — Obsidian 그래프 독립 노드 본격 해소 (2026-04-24)
 **문제**: v98에서 영상 하단에 `[[Claude]]`, `[[Claude Code]]` 등 키워드 링크를 추가했으나 해당 이름의 실제 파일이 없어 **미해결(unresolved) 링크**로 남았습니다. Obsidian 그래프뷰에서 미해결 링크는 엣지를 약하게 표시하거나 숨기기 때문에, 영상 노드들이 MOC 하나에만 연결된 위성 클러스터처럼 보여 "독립 노드"로 인식되었습니다.
@@ -152,12 +202,14 @@ YouTube 재생목록
 ```
 Youtube_Notion_Grap/
 ├── server.js                          # 웹 서버 + Notion API 프록시 + Obsidian 트리거
-├── scheduler.js                       # 자동 스케줄러 (6시간 간격)
+├── scheduler.js                       # 자동 스케줄러 (6시간 간격, 마스터 인제스트 포함)
 ├── index.html                         # 웹 앱 UI (단일 파일)
 ├── package.json                       # Node.js CommonJS 설정
 ├── playlists.json                     # 등록된 재생목록 목록
 ├── .env                               # API 키 (gitignore — 절대 커밋 금지)
 ├── favicon.svg                        # 브라우저 탭 아이콘
+├── migrate_classify.js                # 기존 영상 일괄 재분류 스크립트 (v102)
+├── oauth_setup.js                     # YouTube OAuth refresh_token 1회 발급 도구 (v102)
 ├── notion_to_obsidian.js              # Notion → Obsidian 일회성 마이그레이션
 ├── sync_obsidian.py                   # Obsidian 증분 동기화 (신규 영상만 추가)
 ├── build_obsidian_wiki.py             # MOC + 채널 목차 + 키워드 링크 빌더
@@ -166,6 +218,9 @@ Youtube_Notion_Grap/
 ├── com.irichgreen.ytsummarizer.plist  # launchd 스케줄러 설정
 ├── install-server.sh                  # 서버 자동시작 설치 스크립트
 ├── install-scheduler.sh               # 스케줄러 설치 스크립트
+├── lib/
+│   ├── youtube_oauth.js               # YouTube OAuth 2.0 + playlistItems.insert (v102)
+│   └── classifier.js                  # Gemini 기반 토픽 분류기 (v102)
 └── README.md
 ```
 
@@ -189,6 +244,13 @@ EMAIL_ENABLED=false
 EMAIL_FROM=your@gmail.com
 EMAIL_TO=recipient@email.com
 EMAIL_APP_PASS=xxxx xxxx xxxx xxxx
+
+# YouTube OAuth 2.0 (v102 — 토픽 재생목록 자동 추가용)
+# oauth_setup.js 실행 후 자동 기입됩니다
+YOUTUBE_OAUTH_CLIENT_ID=...
+YOUTUBE_OAUTH_CLIENT_SECRET=...
+YOUTUBE_OAUTH_REFRESH_TOKEN=...
+YOUTUBE_MASTER_PLAYLIST_ID=PLxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 > `.env` 파일을 저장하면 서버 재시작 시 자동으로 로드됩니다.  
@@ -424,6 +486,7 @@ python3 cleanup_duplicates.py
 | v99 | **조회수/구독자수 업데이트 임계값 완화** — 20% → 15% (실사용 변화율이 2~10% 구간이 많아 절충) (scheduler.js + index.html 동일 수정) |
 | v100 | **Obsidian 독립 노드 본격 해소** — `build_obsidian_wiki.py`에 `build_keyword_hubs()` 추가: 키워드별 허브 파일(`_MOC/Claude.md`, `Claude Code.md` 등) 자동 생성 → `[[Claude]]` 미해결 링크가 실제 파일로 해결되어 같은 키워드 언급 영상끼리 허브를 통해 연결됨 |
 | v101 | **Notion 주제 태그 한글 깨짐 차단** — `addTopicToPage` / 캐시 읽기 / 신규 페이지 작성 모든 경로에 `.normalize('NFC')` 적용 (scheduler.js + index.html). 일회성 정리 스크립트 `fix_nfc_topics.js` 추가 — DB 옵션 풀에 잔존하던 U+FFFD 깨진 옵션 2종("AI 바이브코��", "AI 노트��� LM") 제거 (옵션 35→33) |
+| v102 | **AI 영상목록 마스터 인제스트** — `lib/youtube_oauth.js`(OAuth 2.0 + playlist write), `lib/classifier.js`(Gemini 토픽 분류기, 상한 5개), `migrate_classify.js`(기존 1,518개 재분류, `--dry-run/--notion-only/--youtube-only/--apply`), `oauth_setup.js`(refresh_token 1회 발급). `scheduler.js`에 `processMasterIngest()` 추가 — "AI 영상목록" 감시 → 요약+분류 → Notion 저장 → YouTube 토픽 재생목록 자동 배분. `server.js`에 `/api/master-ingest` SSE 엔드포인트 추가, `index.html`에 "🆕 AI 영상목록 처리" 버튼 추가 |
 
 ---
 
