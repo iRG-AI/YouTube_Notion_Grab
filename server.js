@@ -249,12 +249,14 @@ const server = http.createServer((req, res) => {
         if (jsonLine && process.env.TELEGRAM_ENABLED === 'true') {
           try {
             const r = JSON.parse(jsonLine.replace('RESULT_JSON:', ''));
-            const obsMsg = [
+            const obsLines = [
               `📓 Obsidian AI LLM Wiki`,
               `  • 신규 추가: ${r.added}개`,
+              ...(r.tags_updated > 0 ? [`  • tags 갱신: ${r.tags_updated}개`] : []),
               `  • Wiki 재구성: ${r.rebuilt ? '✅ 완료' : '⏭ 생략'}`,
               `  • 소요시간: ${r.elapsed}초`,
-            ].join('\n');
+            ];
+            const obsMsg = obsLines.join('\n');
             const combined = notionMsg
               ? `${notionMsg}\n━━━━━━━━━━━━━━━━━━━━━━\n${obsMsg}`
               : obsMsg;
