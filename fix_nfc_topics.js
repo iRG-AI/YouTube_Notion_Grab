@@ -46,6 +46,7 @@ if (!TOKEN || !DB_ID) {
 }
 
 // ── HTTPS 요청 헬퍼 ──
+// ⚠️ chunks를 Buffer 배열로 수집 → utf8 디코딩 (한글 멀티바이트가 청크 경계에서 잘려 U+FFFD로 깨지는 버그 차단)
 function notionFetch(method, urlPath, body) {
   return new Promise((resolve, reject) => {
     const data = body ? JSON.stringify(body) : null;
@@ -60,11 +61,12 @@ function notionFetch(method, urlPath, body) {
         ...(data ? { 'Content-Length': Buffer.byteLength(data) } : {}),
       },
     }, (res) => {
-      let chunks = '';
-      res.on('data', (c) => chunks += c);
+      const chunks = [];
+      res.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
       res.on('end', () => {
+        const raw = Buffer.concat(chunks).toString('utf8');
         try {
-          resolve({ status: res.statusCode, data: chunks ? JSON.parse(chunks) : null });
+          resolve({ status: res.statusCode, data: raw ? JSON.parse(raw) : null });
         } catch (e) { reject(e); }
       });
     });
@@ -74,14 +76,45 @@ function notionFetch(method, urlPath, body) {
   });
 }
 
+// ── canonical 토픽 목록 로드 (playlists.json + 마스터) ──
+function loadCanonicalTopics() {
+  try {
+    const pls = JSON.parse(fs.readFileSync(path.join(__dirname, 'playlists.json'), 'utf-8'));
+    const names = pls.map(p => (p.name || '').normalize('NFC')).filter(Boolean);
+    names.push('AI 영상목록');  // 마스터 (v102)
+    return [...new Set(names)];
+  } catch { return []; }
+}
+
+// ── 깨진 이름(U+FFFD 포함) → canonical 매핑 (subsequence 매칭) ──
+//   visible chars(U+FFFD 제외)이 canonical 이름에 순서대로 등장하면 매칭
+function recoverBrokenName(broken, canonicals) {
+  const visible = broken.replace(/�/g, '');
+  if (!visible) return null;
+
+  const matches = canonicals.filter(c => {
+    let i = 0;
+    for (const ch of c) { if (i < visible.length && ch === visible[i]) i++; }
+    return i === visible.length;
+  });
+
+  // 단일 매칭만 자동 복구 (모호하면 수동 검토)
+  return matches.length === 1 ? matches[0] : null;
+}
+
 // ── 메인 ──
 (async () => {
   console.log(`🔧 모드: ${DRY_RUN ? 'DRY-RUN (미리보기, 실제 변경 안 함)' : '실제 적용'}`);
+
+  const CANONICAL = loadCanonicalTopics();
+  console.log(`📚 canonical 토픽: ${CANONICAL.length}개 (U+FFFD 복구용)\n`);
   console.log('📥 Notion DB 페이지 로드 중...\n');
 
   let cursor = undefined;
   let total = 0, changedPages = 0, removedNfdCount = 0;
+  let recoveredCount = 0, unrecoverableCount = 0;
   const nfdSamples = new Set();
+  const recoveryMap = new Map();  // 깨진 이름 → 복구된 이름 (또는 null=수동검토)
 
   do {
     const body = { page_size: 100 };
@@ -101,7 +134,25 @@ function notionFetch(method, urlPath, body) {
       const seen = new Set();
       const cleaned = [];
       for (const t of original) {
-        const nfc = (t.name || '').normalize('NFC');
+        let nfc = (t.name || '').normalize('NFC');
+
+        // U+FFFD 포함 시 canonical 매칭으로 복구 시도
+        if (/�/.test(nfc)) {
+          if (!recoveryMap.has(nfc)) {
+            const recovered = recoverBrokenName(nfc, CANONICAL);
+            recoveryMap.set(nfc, recovered);
+            if (recovered) recoveredCount++; else unrecoverableCount++;
+          }
+          const recovered = recoveryMap.get(nfc);
+          if (recovered) {
+            nfdSamples.add(`${JSON.stringify(nfc)} ➜ ${JSON.stringify(recovered)} (복구)`);
+            nfc = recovered;
+          } else {
+            nfdSamples.add(`${JSON.stringify(nfc)} ⚠️  수동 검토 필요`);
+            continue;  // 복구 실패 → 해당 토픽 페이지에서 제거
+          }
+        }
+
         if (!seen.has(nfc)) {
           seen.add(nfc);
           cleaned.push(nfc);
@@ -139,6 +190,8 @@ function notionFetch(method, urlPath, body) {
   console.log(`📊 총 페이지: ${total}`);
   console.log(`🔧 변경 ${DRY_RUN ? '대상' : '완료'}: ${changedPages} 페이지`);
   console.log(`🗑  제거된 NFD 태그 발생: ${removedNfdCount}회`);
+  console.log(`✨ U+FFFD 복구: ${recoveredCount}종 (canonical 매칭 성공)`);
+  if (unrecoverableCount > 0) console.log(`⚠️  복구 실패(수동 검토): ${unrecoverableCount}종`);
   if (nfdSamples.size > 0) {
     console.log(`\n📋 발견된 NFD 변형 (${nfdSamples.size}종):`);
     for (const s of nfdSamples) console.log(`   ${s}`);

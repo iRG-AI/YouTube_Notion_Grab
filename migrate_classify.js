@@ -91,6 +91,7 @@ const AVAILABLE_TOPICS = Object.keys(TOPIC_TO_PLAYLIST_ID);
 console.log(`📚 로드된 토픽: ${AVAILABLE_TOPICS.length}개`);
 
 // ── Notion 호출 ──
+// ⚠️ chunks를 Buffer 배열로 수집 → utf8 디코딩 (한글 멀티바이트가 청크 경계에서 잘려 U+FFFD로 깨지는 버그 차단)
 function notionFetch(method, urlPath, body) {
   return new Promise((resolve, reject) => {
     const data = body ? JSON.stringify(body) : null;
@@ -103,10 +104,11 @@ function notionFetch(method, urlPath, body) {
         ...(data ? { 'Content-Length': Buffer.byteLength(data) } : {}),
       },
     }, (res) => {
-      let chunks = '';
-      res.on('data', (c) => chunks += c);
+      const chunks = [];
+      res.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
       res.on('end', () => {
-        try { resolve({ status: res.statusCode, data: chunks ? JSON.parse(chunks) : null }); }
+        const raw = Buffer.concat(chunks).toString('utf8');
+        try { resolve({ status: res.statusCode, data: raw ? JSON.parse(raw) : null }); }
         catch (e) { reject(e); }
       });
     });
