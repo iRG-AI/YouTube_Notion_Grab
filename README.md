@@ -5,7 +5,7 @@ YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하여 **Notion 
 
 ---
 
-## 🆕 최근 주요 변경사항 (v102)
+## 🆕 최근 주요 변경사항 (v103)
 
 ### v102 — AI 영상목록 마스터 인제스트 (2026-04-25)
 **목표**: 사용자가 영상을 분류 없이 "AI 영상목록" 하나에만 넣으면 자동으로 분류 → 저장 → 재생목록 추가까지 처리.
@@ -487,7 +487,7 @@ python3 cleanup_duplicates.py
 | v100 | **Obsidian 독립 노드 본격 해소** — `build_obsidian_wiki.py`에 `build_keyword_hubs()` 추가: 키워드별 허브 파일(`_MOC/Claude.md`, `Claude Code.md` 등) 자동 생성 → `[[Claude]]` 미해결 링크가 실제 파일로 해결되어 같은 키워드 언급 영상끼리 허브를 통해 연결됨 |
 | v101 | **Notion 주제 태그 한글 깨짐 차단** — `addTopicToPage` / 캐시 읽기 / 신규 페이지 작성 모든 경로에 `.normalize('NFC')` 적용 (scheduler.js + index.html). 일회성 정리 스크립트 `fix_nfc_topics.js` 추가 — DB 옵션 풀에 잔존하던 U+FFFD 깨진 옵션 2종("AI 바이브코��", "AI 노트��� LM") 제거 (옵션 35→33) |
 | v102 | **AI 영상목록 마스터 인제스트** — `lib/youtube_oauth.js`(OAuth 2.0 + playlist write), `lib/classifier.js`(Gemini 토픽 분류기, 상한 5개), `migrate_classify.js`(기존 1,518개 재분류, `--dry-run/--notion-only/--youtube-only/--apply`), `oauth_setup.js`(refresh_token 1회 발급). `scheduler.js`에 `processMasterIngest()` 추가 — "AI 영상목록" 감시 → 요약+분류 → Notion 저장 → YouTube 토픽 재생목록 자동 배분. `server.js`에 `/api/master-ingest` SSE 엔드포인트 추가, `index.html`에 "🆕 AI 영상목록 처리" 버튼 추가 |
-| v103 | **마스터 인제스트 결과 메시지 상세화 + 진행률 UI 완료 표시 + 한글 깨짐 근본 원인 수정** — ① 텔레그램 메시지에 주제별 분류 건수, 저장 영상 목록 5개, 스킵 사유("이미 Notion에 저장됨") 명시. ② 웹 UI 완료 시 진행 바 100%/"완료" 라벨/"✅ 처리 완료" 표시 (기존: 0% 멈춤 버그). ③ YouTube quota 초과 시 `pending_playlist_adds.json` 자동 적재 → 다음날 cron이 처리. ④ **`migrate_classify.js`/`fix_nfc_topics.js` 의 HTTP 응답 chunk-concat 버그 수정** — `chunks += c` (string) → `Buffer.concat` 으로 변경. 한글 멀티바이트가 TCP 청크 경계에서 잘려 U+FFFD(`�`)로 깨지는 v101 후 잔존 버그가 근본 원인. ⑤ `fix_nfc_topics.js`에 U+FFFD subsequence 매칭 복구 로직 추가 — playlists.json + "AI 영상목록" 의 canonical 토픽에 visible char 부분 매칭으로 자동 복원 (5종 옵션, 5페이지 정리) |
+| v103 | **마스터 인제스트 결과 메시지 상세화 + 진행률 UI 완료 표시 + 한글 깨짐 근본 원인 수정 + Obsidian tags 동기화** — ① 텔레그램 메시지에 주제별 분류 건수, 저장 영상 목록 5개, 스킵 사유("이미 Notion에 저장됨") 명시. ② 웹 UI 완료 시 진행 바 100%/"완료" 라벨/"✅ 처리 완료" 표시 (기존: 0% 멈춤 버그). ③ YouTube quota 초과 시 `pending_playlist_adds.json` 자동 적재 → 다음날 cron이 처리. ④ **`migrate_classify.js`/`fix_nfc_topics.js` 의 HTTP 응답 chunk-concat 버그 수정** — `chunks += c` (string) → `Buffer.concat` 으로 변경. 한글 멀티바이트가 TCP 청크 경계에서 잘려 U+FFFD(`�`)로 깨지는 근본 원인. ⑤ `fix_nfc_topics.js`에 U+FFFD subsequence 매칭 복구 로직 추가 — canonical 토픽에 visible char 부분 매칭으로 자동 복원 (5종 옵션 정리). ⑥ **`AI 영상목록`을 주제 태그에서 제거** — 재생목록명이지 주제 분류가 아님. 기존 19개 페이지 태그 일괄 제거, 옵션 풀에서도 삭제. ⑦ **`sync_obsidian.py`에 `--sync-tags` 모드 추가** — Notion 주제 변경 시 기존 Obsidian .md 파일 frontmatter `tags:` 일괄 동기화 (1,464개 갱신) |
 
 ---
 

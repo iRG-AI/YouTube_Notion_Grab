@@ -94,7 +94,8 @@ def safe_filename(s):
 
 # ── 기존 Vault 파일 notion_id 목록 수집 ──
 def get_existing_notion_ids():
-    ids = set()
+    """notion_id → 파일 경로 dict 반환 (ids 집합도 .keys()로 추출 가능)"""
+    id_to_path = {}
     for root, dirs, files in os.walk(VAULT):
         dirs[:] = [d for d in dirs if not d.startswith('.') and d != '_MOC']
         for f in files:
@@ -103,8 +104,48 @@ def get_existing_notion_ids():
             content = nfc(open(fpath, encoding='utf-8', errors='ignore').read())
             m = re.search(r'^notion_id:\s*(.+)$', content, re.MULTILINE)
             if m:
-                ids.add(m.group(1).strip())
-    return ids
+                id_to_path[m.group(1).strip()] = fpath
+    return id_to_path
+
+# ── 기존 .md 파일의 frontmatter tags 업데이트 ──
+def update_tags_in_file(fpath, new_topics):
+    """파일 frontmatter의 tags: 라인만 교체. 변경 시 True 반환."""
+    try:
+        content = nfc(open(fpath, encoding='utf-8', errors='ignore').read())
+    except Exception:
+        return False
+    new_tags_line = f'tags: [{", ".join(chr(34) + t + chr(34) for t in new_topics)}]'
+    # 현재 tags 라인 추출해서 비교
+    m = re.search(r'^tags:.*$', content, re.MULTILINE)
+    if m and m.group(0) == new_tags_line:
+        return False  # 변경 없음
+    if m:
+        updated = content[:m.start()] + new_tags_line + content[m.end():]
+    else:
+        return False  # tags 라인 없으면 스킵
+    open(fpath, 'w', encoding='utf-8').write(nfc(updated))
+    return True
+
+# ── 기존 파일 tags Notion과 동기화 (--sync-tags 전용) ──
+def sync_existing_tags(pages):
+    """Notion의 현재 주제와 Obsidian .md tags를 맞춤. 변경된 파일 수 반환."""
+    log('🏷  기존 파일 tags Notion 동기화 중...')
+    id_to_path = get_existing_notion_ids()
+    log(f'  Vault 파일: {len(id_to_path)}개\n')
+
+    updated = 0
+    for page in pages:
+        pid = page['id']
+        if pid not in id_to_path:
+            continue
+        topics = [nfc(t.get('name', '')) for t in page.get('properties', {}).get('주제', {}).get('multi_select', [])]
+        if update_tags_in_file(id_to_path[pid], topics):
+            updated += 1
+            if updated % 50 == 0:
+                log(f'  ✓ {updated}개 갱신 중...')
+
+    log(f'  ✅ tags 동기화 완료 — {updated}개 파일 갱신\n')
+    return updated
 
 # ── Notion 블록(본문) 가져오기 ──
 def get_blocks(page_id):
@@ -191,11 +232,8 @@ def save_page_as_md(page):
     return folder, filename
 
 # ── 노션 DB 전체 로드 및 신규 파일 추가 ──
-def sync_new_pages():
-    log('📦 기존 Vault notion_id 수집 중...')
-    existing_ids = get_existing_notion_ids()
-    log(f'  기존 파일: {len(existing_ids)}개\n')
-
+def load_all_notion_pages():
+    """Notion DB 전체 페이지 로드. pages 리스트 반환."""
     log('🔄 Notion DB 조회 중...')
     pages, cursor = [], None
     while True:
@@ -206,6 +244,16 @@ def sync_new_pages():
         cursor = res.get('next_cursor')
         if not cursor: break
     log(f'  총 {len(pages)}개 페이지\n')
+    return pages
+
+def sync_new_pages(pages=None):
+    log('📦 기존 Vault notion_id 수집 중...')
+    id_to_path = get_existing_notion_ids()
+    existing_ids = set(id_to_path.keys())
+    log(f'  기존 파일: {len(existing_ids)}개\n')
+
+    if pages is None:
+        pages = load_all_notion_pages()
 
     new_pages = [p for p in pages if p['id'] not in existing_ids]
     log(f'✨ 신규 영상: {len(new_pages)}개\n')
@@ -227,11 +275,21 @@ if __name__ == '__main__':
     log('🚀 Obsidian 증분 동기화 시작\n')
     start = time.time()
 
+    sync_tags_mode = '--sync-tags' in sys.argv
+
+    # Notion 페이지 1회 로드 (신규 추가 + tags 동기화 양쪽에서 재사용)
+    pages = load_all_notion_pages()
+
+    # --sync-tags: 기존 파일 tags를 Notion 현재 주제로 업데이트
+    tags_updated = 0
+    if sync_tags_mode:
+        tags_updated = sync_existing_tags(pages)
+
     # 1단계: 신규 파일 추가
-    added = sync_new_pages()
+    added = sync_new_pages(pages)
 
     # 2단계: 신규 파일이 있거나 강제 재구성 옵션일 때 Wiki 재구성
-    force = '--rebuild' in sys.argv
+    force = '--rebuild' in sys.argv or sync_tags_mode
     rebuilt = False
     rebuild_err = ''
     if added > 0 or force:
@@ -254,6 +312,11 @@ if __name__ == '__main__':
     log('\n🎉 Obsidian 동기화 완료!')
 
     # ── log.md 기록 ──
+    if tags_updated > 0:
+        write_wiki_log('tags-sync', f'기존 파일 tags {tags_updated}개 갱신', {
+            '갱신 파일': f'{tags_updated}개',
+            '소요시간': f'{elapsed}초',
+        })
     if added > 0:
         write_wiki_log('ingest', f'신규 영상 {added}개 추가', {
             '추가된 파일': f'{added}개',
