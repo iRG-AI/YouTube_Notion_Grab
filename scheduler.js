@@ -657,7 +657,7 @@ async function processMasterIngest(notionCache) {
           availableTopics
         );
         const topics = cls.topics;  // 분류된 토픽들
-        const allTopics = ['AI 영상목록', ...topics];  // 마스터 + 분류 토픽
+        const allTopics = [...topics];  // 분류 토픽만 (AI 영상목록은 재생목록이지 주제 태그 아님)
 
         const confStr = `conf=${cls.confidence.toFixed(2)}`;
         log(`    🏷  분류: [${topics.join(', ')}] (${confStr})`);
@@ -668,7 +668,7 @@ async function processMasterIngest(notionCache) {
         // Notion 저장
         const notionPage = await saveToNotionWithTopics(v, summary, allTopics);
         const pageId = notionPage.id;
-        log(`    ✓ Notion 저장 완료 (주제: ${allTopics.join(', ')})`);
+        log(`    ✓ Notion 저장 완료 (주제: ${allTopics.join(', ') || '(분류 없음)'})`);
 
         // notionCache 갱신
         notionCache.set(v.videoId || v.title, {
@@ -985,7 +985,7 @@ async function main() {
       // 저장된 영상 목록 (최대 5개)
       const list = (r.savedList || []).slice(0, 5);
       list.forEach((v, i) => {
-        const topicsStr = v.topics.filter(t => t !== 'AI 영상목록').join(', ') || '(분류 없음)';
+        const topicsStr = v.topics.join(', ') || '(분류 없음)';
         const confMark = v.confidence < 0.6 ? ' ⚠️' : '';
         lines.push(`  ${i + 1}. ${v.title.slice(0, 35)} → ${topicsStr}${confMark}`);
       });
