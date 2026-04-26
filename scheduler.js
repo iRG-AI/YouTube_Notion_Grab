@@ -981,17 +981,6 @@ async function main() {
       if (topicEntries.length) {
         lines.push(`  🏷 주제별: ${topicEntries.map(([t, c]) => `${t}(${c})`).join(', ')}`);
       }
-
-      // 저장된 영상 목록 (최대 5개)
-      const list = (r.savedList || []).slice(0, 5);
-      list.forEach((v, i) => {
-        const topicsStr = v.topics.join(', ') || '(분류 없음)';
-        const confMark = v.confidence < 0.6 ? ' ⚠️' : '';
-        lines.push(`  ${i + 1}. ${v.title.slice(0, 35)} → ${topicsStr}${confMark}`);
-      });
-      if ((r.savedList || []).length > 5) {
-        lines.push(`  … 외 ${r.savedList.length - 5}개`);
-      }
     } else {
       lines.push(`• AI 영상목록 (마스터): 재생목록 ${fmtNum(inPlaylist)}개 | 신규 없음`);
       lines.push(`  ℹ️ ${fmtNum(r.skip)}개 모두 이미 Notion에 저장된 영상`);
