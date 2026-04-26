@@ -1047,6 +1047,7 @@ async function main() {
           `━━━━━━━━━━━━━━━━━━━━━━`,
           `📓 Obsidian AI LLM Wiki`,
           `  • 신규 추가: ${r.added}개`,
+          ...(r.tags_updated > 0 ? [`  • tags 갱신: ${r.tags_updated}개`] : []),
           `  • Wiki 재구성: ${r.rebuilt ? '✅ 완료' : '⏭ 생략'}`,
           `  • 소요시간: ${r.elapsed}초`,
         ].join('\n');

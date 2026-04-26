@@ -129,9 +129,8 @@ def update_tags_in_file(fpath, new_topics):
 # ── 기존 파일 tags Notion과 동기화 (--sync-tags 전용) ──
 def sync_existing_tags(pages):
     """Notion의 현재 주제와 Obsidian .md tags를 맞춤. 변경된 파일 수 반환."""
-    log('🏷  기존 파일 tags Notion 동기화 중...')
+    log('🏷  기존 파일 tags 동기화 중...')
     id_to_path = get_existing_notion_ids()
-    log(f'  Vault 파일: {len(id_to_path)}개\n')
 
     updated = 0
     for page in pages:
@@ -141,10 +140,11 @@ def sync_existing_tags(pages):
         topics = [nfc(t.get('name', '')) for t in page.get('properties', {}).get('주제', {}).get('multi_select', [])]
         if update_tags_in_file(id_to_path[pid], topics):
             updated += 1
-            if updated % 50 == 0:
-                log(f'  ✓ {updated}개 갱신 중...')
 
-    log(f'  ✅ tags 동기화 완료 — {updated}개 파일 갱신\n')
+    if updated > 0:
+        log(f'  ✅ {updated}개 파일 tags 갱신\n')
+    else:
+        log(f'  ✅ 변경 없음 (모두 최신 상태)\n')
     return updated
 
 # ── Notion 블록(본문) 가져오기 ──
@@ -275,24 +275,21 @@ if __name__ == '__main__':
     log('🚀 Obsidian 증분 동기화 시작\n')
     start = time.time()
 
-    sync_tags_mode = '--sync-tags' in sys.argv
-
     # Notion 페이지 1회 로드 (신규 추가 + tags 동기화 양쪽에서 재사용)
     pages = load_all_notion_pages()
 
-    # --sync-tags: 기존 파일 tags를 Notion 현재 주제로 업데이트
-    tags_updated = 0
-    if sync_tags_mode:
-        tags_updated = sync_existing_tags(pages)
+    # 기존 파일 tags를 Notion 현재 주제로 항상 동기화
+    # (주제 변경이 없으면 update_tags_in_file이 False 반환 → 실질적 파일 쓰기 0건, 오버헤드 미미)
+    tags_updated = sync_existing_tags(pages)
 
     # 1단계: 신규 파일 추가
     added = sync_new_pages(pages)
 
-    # 2단계: 신규 파일이 있거나 강제 재구성 옵션일 때 Wiki 재구성
-    force = '--rebuild' in sys.argv or sync_tags_mode
+    # 2단계: 신규/갱신이 있거나 강제 재구성 옵션일 때 Wiki 재구성
+    force = '--rebuild' in sys.argv
     rebuilt = False
     rebuild_err = ''
-    if added > 0 or force:
+    if added > 0 or tags_updated > 0 or force:
         log('🔧 Wiki 재구성 중 (MOC + 키워드 링크)...')
         build_script = os.path.join(SCRIPT_DIR, 'build_obsidian_wiki.py')
         result = subprocess.run(
@@ -333,6 +330,7 @@ if __name__ == '__main__':
     # 결과를 JSON으로 출력 (scheduler.js에서 파싱)
     print('RESULT_JSON:' + json.dumps({
         'added': added,
+        'tags_updated': tags_updated,
         'rebuilt': rebuilt,
         'elapsed': elapsed,
         'error': rebuild_err,
