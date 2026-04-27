@@ -304,6 +304,14 @@ const server = http.createServer((req, res) => {
       const text = d.toString();
       output += text;
       for (const line of text.split('\n')) {
+        // RESULT_ROW: 접두사 → 구조화 데이터(결과 테이블용)로 별도 전송
+        if (line.startsWith('RESULT_ROW:')) {
+          try {
+            const row = JSON.parse(line.slice('RESULT_ROW:'.length).trim());
+            try { res.write(`data: ${JSON.stringify({ row })}\n\n`); } catch {}
+          } catch {}
+          continue;
+        }
         const clean = line.replace(/^\[.*?\]\s*/, '').trim();
         if (clean) send(clean);
       }

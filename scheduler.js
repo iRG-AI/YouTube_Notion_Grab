@@ -638,6 +638,12 @@ async function processMasterIngest(notionCache) {
       if (skipList.length < 5) skipList.push(v.title || '(제목 없음)');
       skip++;
       log(`  ⏭ Skip (이미 저장됨): ${v.title?.slice(0, 50)}`);
+      // 결과 테이블용 구조화 데이터 (server.js → index.html 전달)
+      console.log('RESULT_ROW:' + JSON.stringify({
+        videoId: v.videoId, title: v.title, channelTitle: v.channelTitle,
+        publishedAt: v.publishedAt, viewCount: v.viewCount, subscriberCount: v.subscriberCount,
+        summary: null, topics: [], status: 'skip',
+      }));
     } else {
       newVideos.push(v);
     }
@@ -683,6 +689,12 @@ async function processMasterIngest(notionCache) {
         const notionPage = await saveToNotionWithTopics(v, summary, allTopics);
         const pageId = notionPage.id;
         log(`    ✓ Notion 저장 완료 (주제: ${allTopics.join(', ') || '(분류 없음)'})`);
+        // 결과 테이블용 구조화 데이터 (server.js → index.html 전달)
+        console.log('RESULT_ROW:' + JSON.stringify({
+          videoId: v.videoId, title: v.title, channelTitle: v.channelTitle,
+          publishedAt: v.publishedAt, viewCount: v.viewCount, subscriberCount: v.subscriberCount,
+          summary: summary?.slice(0, 200) || '', topics: allTopics, status: 'ok',
+        }));
 
         // notionCache 갱신
         notionCache.set(v.videoId || v.title, {
@@ -730,6 +742,12 @@ async function processMasterIngest(notionCache) {
       } catch (e) {
         log(`    ❌ 오류 (${v.title?.slice(0, 30)}): ${e.message}`);
         error++;
+        // 결과 테이블용 구조화 데이터 (오류)
+        console.log('RESULT_ROW:' + JSON.stringify({
+          videoId: v.videoId, title: v.title, channelTitle: v.channelTitle,
+          publishedAt: v.publishedAt, viewCount: v.viewCount, subscriberCount: v.subscriberCount,
+          summary: `오류: ${e.message}`, topics: [], status: 'error',
+        }));
       }
     }
     if (i + PARALLEL < newVideos.length) await new Promise(r => setTimeout(r, 300));

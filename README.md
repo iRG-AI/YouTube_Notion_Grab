@@ -507,6 +507,7 @@ python3 cleanup_duplicates.py
 | v103 | **마스터 인제스트 결과 메시지 상세화 + 진행률 UI 완료 표시 + Obsidian tags 동기화** — ① 텔레그램 메시지 주제별 분류 건수 표시 (영상 목록 제거). ② 웹 UI 완료 시 진행 바 100%/"완료" 라벨/"✅ 처리 완료" 표시 (0% 멈춤 버그 수정). ③ YouTube quota 초과 시 `pending_playlist_adds.json` 자동 적재 → 다음날 cron 처리. ④ `AI 영상목록`을 주제 태그에서 제거 — 재생목록명, 분류 아님. ⑤ `sync_obsidian.py` 기존 파일 tags 자동 동기화 — 매 실행마다 Notion 현재 주제와 Obsidian frontmatter `tags:` 자동 비교·갱신. `server.js`/`scheduler.js` 텔레그램에 "tags 갱신 N개" 조건부 표시 |
 | v104 | **분류기 프롬프트 개선: 대상 독자/채널 신호 추가** — `lib/classifier.js` 제목 우선 신호에 "제목에 '바이브코더' 포함 → AI 바이브코딩" 추가 (위해/위한뿐 아니라 "바이브코더 필수", "바이브코더가 알아야 할" 등 모두 커버). 채널명 신호 신규 추가 — 채널명에 도구명 포함 + 내용 연관 시 해당 토픽 포함. "양실장의 바이브코딩대학" 채널 영상 빈 배열 오분류 → 수동 수정 |
 | v105 | **스케줄러 네트워크 재시도 강화** — `loadNotionCache()`의 재시도 로직이 HTTP 상태 오류만 잡고 DNS 실패(`ENOTFOUND`) 등 네트워크 예외는 `throw`되어 스케줄러 전체 종료. Mac 수면 직후 6시 launchd 기동 시 재현됨. `try/catch`로 네트워크 예외 포착 후 30초 대기 재시도(최대 10회, 약 5분)로 수정 |
+| v106 | **웹 UI 처리 결과 테이블 — AI 영상목록 모드도 채워지도록 수정** — 기존: SSE가 `{ msg: "..." }` 텍스트만 전송해 결과 테이블에 행이 추가되지 않음. `scheduler.js`에서 영상 저장/스킵/오류 시 `RESULT_ROW:{json}` 마커를 stdout에 출력, `server.js`가 이를 `{ row: {...} }` SSE로 분리 전송, `index.html`이 `payload.row` 수신 시 `addRow()` 호출. 결과 테이블에 토픽 배지 포함 요약 표시 |
 
 ---
 
