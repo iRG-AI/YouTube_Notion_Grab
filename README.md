@@ -5,7 +5,24 @@ YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하여 **Notion 
 
 ---
 
-## 🆕 최근 주요 변경사항 (v103)
+## 🆕 최근 주요 변경사항 (v104)
+
+### v103 — 마스터 인제스트 결과 메시지 상세화 + 진행률 UI + Obsidian 자동 tags 동기화 (2026-04-27)
+**변경 요약**: ① 텔레그램 메시지에 주제별 분류 건수 표시 (영상 목록 제거). ② 웹 UI 완료 시 진행 바 100%/"완료" 표시 (0% 멈춤 버그 수정). ③ YouTube quota 초과 시 `pending_playlist_adds.json` 자동 적재 → 다음날 cron 처리. ④ `AI 영상목록`을 주제 태그에서 제거 (재생목록명, 분류 아님). ⑤ `sync_obsidian.py` 기존 파일 tags 자동 동기화 — 매 실행마다 Notion 현재 주제와 Obsidian frontmatter `tags:` 자동 비교·갱신.
+
+**수정 파일**: `lib/classifier.js`, `scheduler.js`, `server.js`, `index.html`, `sync_obsidian.py`
+
+### v104 — 분류기 프롬프트 개선: 대상 독자 신호 + 채널명 신호 (2026-04-27)
+**문제**: "비개발자 바이브코더를 위해 만든, 가볍게 들어도 깊게 남는 프론트엔드 기본 지식" (채널: 양실장의 바이브코딩대학)이 주제 빈 배열로 분류됨.
+
+**원인**: `classifier.js`의 "제목 우선 신호"가 "바이브 코딩으로 X를 했다" 패턴(행위)만 인식. **"바이브코더를 위해/위한 X"** 처럼 대상 독자(target audience)로 명시된 경우, 채널명에 특정 도구/주제가 들어간 경우를 무시.
+
+**수정** — [`lib/classifier.js`](lib/classifier.js):
+- 제목 우선 신호 확장: "바이브코더를 위해/위한 X" → "AI 바이브코딩" 포함
+- **채널 신호 추가**: 채널명에 "바이브코딩" 포함 + 코딩·개발 관련 내용 → "AI 바이브코딩" 포함. 기타 AI 도구명 포함 채널도 동일 적용.
+- Notion에서 해당 영상 수동 재분류 완료: `[]` → `["AI 바이브코딩"]`
+
+---
 
 ### v102 — AI 영상목록 마스터 인제스트 (2026-04-25)
 **목표**: 사용자가 영상을 분류 없이 "AI 영상목록" 하나에만 넣으면 자동으로 분류 → 저장 → 재생목록 추가까지 처리.
@@ -487,7 +504,8 @@ python3 cleanup_duplicates.py
 | v100 | **Obsidian 독립 노드 본격 해소** — `build_obsidian_wiki.py`에 `build_keyword_hubs()` 추가: 키워드별 허브 파일(`_MOC/Claude.md`, `Claude Code.md` 등) 자동 생성 → `[[Claude]]` 미해결 링크가 실제 파일로 해결되어 같은 키워드 언급 영상끼리 허브를 통해 연결됨 |
 | v101 | **Notion 주제 태그 한글 깨짐 차단** — `addTopicToPage` / 캐시 읽기 / 신규 페이지 작성 모든 경로에 `.normalize('NFC')` 적용 (scheduler.js + index.html). 일회성 정리 스크립트 `fix_nfc_topics.js` 추가 — DB 옵션 풀에 잔존하던 U+FFFD 깨진 옵션 2종("AI 바이브코��", "AI 노트��� LM") 제거 (옵션 35→33) |
 | v102 | **AI 영상목록 마스터 인제스트** — `lib/youtube_oauth.js`(OAuth 2.0 + playlist write), `lib/classifier.js`(Gemini 토픽 분류기, 상한 5개), `migrate_classify.js`(기존 1,518개 재분류, `--dry-run/--notion-only/--youtube-only/--apply`), `oauth_setup.js`(refresh_token 1회 발급). `scheduler.js`에 `processMasterIngest()` 추가 — "AI 영상목록" 감시 → 요약+분류 → Notion 저장 → YouTube 토픽 재생목록 자동 배분. `server.js`에 `/api/master-ingest` SSE 엔드포인트 추가, `index.html`에 "🆕 AI 영상목록 처리" 버튼 추가 |
-| v103 | **마스터 인제스트 결과 메시지 상세화 + 진행률 UI 완료 표시 + 한글 깨짐 근본 원인 수정 + Obsidian tags 동기화** — ① 텔레그램 메시지에 주제별 분류 건수, 저장 영상 목록 5개, 스킵 사유("이미 Notion에 저장됨") 명시. ② 웹 UI 완료 시 진행 바 100%/"완료" 라벨/"✅ 처리 완료" 표시 (기존: 0% 멈춤 버그). ③ YouTube quota 초과 시 `pending_playlist_adds.json` 자동 적재 → 다음날 cron이 처리. ④ **`migrate_classify.js`/`fix_nfc_topics.js` 의 HTTP 응답 chunk-concat 버그 수정** — `chunks += c` (string) → `Buffer.concat` 으로 변경. 한글 멀티바이트가 TCP 청크 경계에서 잘려 U+FFFD(`�`)로 깨지는 근본 원인. ⑤ `fix_nfc_topics.js`에 U+FFFD subsequence 매칭 복구 로직 추가 — canonical 토픽에 visible char 부분 매칭으로 자동 복원 (5종 옵션 정리). ⑥ **`AI 영상목록`을 주제 태그에서 제거** — 재생목록명이지 주제 분류가 아님. 기존 19개 페이지 태그 일괄 제거, 옵션 풀에서도 삭제. ⑦ **`sync_obsidian.py` 기존 파일 tags 자동 동기화** — 매 실행마다(스케줄러 6시간 주기 + 웹 UI 실행 후) Notion 현재 주제와 Obsidian .md frontmatter `tags:`를 자동 비교·갱신. 변경 없으면 파일 쓰기 0건(오버헤드 없음), 변경 있으면 Wiki 재구성도 자동 트리거. `server.js`/`scheduler.js` 텔레그램 결과에 "tags 갱신 N개" 조건부 표시 |
+| v103 | **마스터 인제스트 결과 메시지 상세화 + 진행률 UI 완료 표시 + Obsidian tags 동기화** — ① 텔레그램 메시지 주제별 분류 건수 표시 (영상 목록 제거). ② 웹 UI 완료 시 진행 바 100%/"완료" 라벨/"✅ 처리 완료" 표시 (0% 멈춤 버그 수정). ③ YouTube quota 초과 시 `pending_playlist_adds.json` 자동 적재 → 다음날 cron 처리. ④ `AI 영상목록`을 주제 태그에서 제거 — 재생목록명, 분류 아님. ⑤ `sync_obsidian.py` 기존 파일 tags 자동 동기화 — 매 실행마다 Notion 현재 주제와 Obsidian frontmatter `tags:` 자동 비교·갱신. `server.js`/`scheduler.js` 텔레그램에 "tags 갱신 N개" 조건부 표시 |
+| v104 | **분류기 프롬프트 개선: 대상 독자 신호 + 채널명 신호** — `lib/classifier.js` 제목 우선 신호에 "바이브코더를 위해/위한 X" → "AI 바이브코딩" 패턴 추가. 채널명 신호 신규 추가 — 채널명에 "바이브코딩" 등 도구명 포함 + 내용 연관 시 해당 토픽 포함. "양실장의 바이브코딩대학" 채널 영상 주제 빈 배열 오분류 사례 수동 수정 |
 
 ---
 
