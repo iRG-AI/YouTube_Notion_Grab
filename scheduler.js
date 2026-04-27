@@ -324,12 +324,26 @@ async function loadNotionCache() {
   let cursor = undefined;
   let total = 0;
   let retryCount = 0;
-  const MAX_RETRY = 3;
+  const MAX_RETRY = 10;          // 네트워크 복구 대기 포함해 여유 있게
+  const NETWORK_WAIT_MS = 30000; // 네트워크 오류 시 30초 대기
   log('  📦 Notion DB 캐시 로딩 중...');
   do {
     const body = { page_size: 100 };
     if (cursor) body.start_cursor = cursor;
-    const res = await notionCall('POST', `/v1/databases/${CONFIG.notionDbId}/query`, body);
+    let res;
+    try {
+      res = await notionCall('POST', `/v1/databases/${CONFIG.notionDbId}/query`, body);
+    } catch (netErr) {
+      // DNS/네트워크 레벨 오류 (ENOTFOUND, ETIMEDOUT 등) → 재시도
+      retryCount++;
+      const isNetErr = netErr.code === 'ENOTFOUND' || netErr.code === 'ETIMEDOUT'
+                    || netErr.code === 'ECONNREFUSED' || netErr.code === 'ECONNRESET';
+      const waitMs = isNetErr ? NETWORK_WAIT_MS : 2000 * retryCount;
+      log(`  ⚠️ 네트워크 오류 (${netErr.code || netErr.message}), ${waitMs / 1000}초 후 재시도 ${retryCount}/${MAX_RETRY}...`);
+      if (retryCount >= MAX_RETRY) throw netErr;
+      await new Promise(r => setTimeout(r, waitMs));
+      continue;
+    }
     if (res.status !== 200) {
       retryCount++;
       log(`  ⚠️ Notion API 오류 (status ${res.status}), 재시도 ${retryCount}/${MAX_RETRY}...`);
