@@ -13,3 +13,11 @@ node_modules/
 # 환경변수 (API 키 등) - 절대 GitHub에 올리면 안 됨!
 .env
 .env.*
+
+# 런타임 상태 파일
+.migrate_state.json
+.quota_state.json
+migration_preview.csv
+
+# Claude Code 로컬 설정 (개인 환경별 상이)
+.claude/settings.local.json

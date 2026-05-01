@@ -5,7 +5,23 @@ YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하여 **Notion 
 
 ---
 
-## 🆕 최근 주요 변경사항 (v107)
+## 🆕 최근 주요 변경사항 (v108)
+
+### v108 — CLAUDE.md 도입 + Claude Code 개발환경 세팅 (2026-05-02)
+
+**변경 요약**: Claude Code (VS Code 확장) 기반 개발환경 전환에 따른 프로젝트 문서화 및 설정 정비.
+
+**신규 파일**:
+- [`CLAUDE.md`](CLAUDE.md): Claude Code용 프로젝트 컨텍스트 문서. 주요 명령어, 아키텍처 개요, 핵심 파일 역할, NFC 정규화·Notion 블록 한계·YouTube quota 등 중요 제약사항 수록.
+
+**수정 파일**:
+- [`.claude/settings.local.json`](.claude/settings.local.json): 세션별 일회성 허용 43개 → 패턴 기반 13개로 통합 정리 (PID 하드코딩, 특정 PR 제목 등 제거).
+- [`.gitignore`](.gitignore): `.migrate_state.json`, `.quota_state.json`, `migration_preview.csv` 추가.
+
+**글로벌 설정** (저장소 외부):
+- `~/.claude/CLAUDE.md`: Andrej Karpathy의 LLM 코딩 지침 4원칙 추가 — Think Before Coding, Simplicity First, Surgical Changes, Goal-Driven Execution.
+
+---
 
 ### v107 — 분류기 프롬프트: AI 코딩/개발 콘텐츠 → AI 바이브코딩 매핑 추가 (2026-05-02)
 **문제**: "AI한테 코드 맡기면 점점 이상해지는 진짜 이유" (채널: 메이커 에반) — DDD·TDD·기술부채 등 AI 코딩 실천론 영상이 주제 빈 배열로 분류됨.
