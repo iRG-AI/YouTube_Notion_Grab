@@ -575,6 +575,55 @@ async function saveToNotionWithTopics(v, summary, topics) {
   return res.data;
 }
 
+// ── pending_playlist_adds.json 큐 소진 ──
+// 매 실행 시 quota 여유분 내에서 미처리 YouTube 재생목록 추가를 처리합니다.
+async function flushPendingQueue() {
+  const PENDING_PATH = path.join(__dirname, 'pending_playlist_adds.json');
+  let queue = [];
+  try { queue = JSON.parse(fs.readFileSync(PENDING_PATH, 'utf-8')); } catch { return; }
+  if (!queue.length) return;
+
+  let yt;
+  try { yt = require('./lib/youtube_oauth'); } catch (e) {
+    log(`⚠️  flushPendingQueue: youtube_oauth 로드 실패 — ${e.message}`); return;
+  }
+
+  log(`⏳ pending 큐 처리 시작 — ${queue.length}건`);
+  const remaining = [];
+  let done = 0;
+
+  for (let i = 0; i < queue.length; i++) {
+    const item = queue[i];
+    if (!yt.checkQuotaAvailable(50)) {
+      log(`  ⏸  quota 한도 — ${queue.length - i}건 다음 실행으로 연기`);
+      remaining.push(...queue.slice(i));
+      break;
+    }
+    try {
+      await yt.addToPlaylist(item.playlistId, item.videoId);
+      done++;
+    } catch (e) {
+      if (e.code === 'QUOTA_EXHAUSTED') {
+        log(`  ⏸  quota 소진 — ${queue.length - i}건 연기`);
+        remaining.push(...queue.slice(i));
+        break;
+      }
+      // OAuth 토큰 만료 → 전체 중단, 큐 보존
+      if (e.message?.includes('invalid_grant') || e.message?.includes('Token refresh failed')) {
+        log(`  ❌ OAuth 오류 — 큐 처리 중단 (node oauth_setup.js 로 토큰 재발급 필요): ${e.message.slice(0, 80)}`);
+        remaining.push(...queue.slice(i));
+        break;
+      }
+      // 기타 오류: 건너뛰지 않고 큐에 유지 (다음 실행에서 재시도)
+      log(`  ⚠️  실패 [${item.videoId}] ${item.topic || ''}: ${e.message.slice(0, 80)}`);
+      remaining.push(item);
+    }
+  }
+
+  fs.writeFileSync(PENDING_PATH, JSON.stringify(remaining, null, 2));
+  log(`  ✓ pending 처리: ${done}건 추가 완료, ${remaining.length}건 잔여`);
+}
+
 // ── AI 영상목록 → 자동 분류 + Notion 저장 + 토픽 재생목록 추가 ──
 async function processMasterIngest(notionCache) {
   const masterId = CONFIG.masterPlaylistId;
@@ -681,6 +730,9 @@ async function processMasterIngest(notionCache) {
 
         const confStr = `conf=${cls.confidence.toFixed(2)}`;
         log(`    🏷  분류: [${topics.join(', ')}] (${confStr})`);
+        if (cls.droppedTopics?.length) {
+          log(`    ⚠️  droppedTopics (allowedSet 불일치): [${cls.droppedTopics.join(', ')}]`);
+        }
         if (cls.confidence < 0.6) {
           log(`    ⚠️  신뢰도 낮음 — 주제 저장은 하되 수동 검토 권장`);
         }
@@ -952,6 +1004,9 @@ async function main() {
 
   // ── Notion DB 전체 캐시 로드 ──
   const notionCache = await loadNotionCache();
+
+  // ── pending 큐 소진 (quota 여유분 내에서) ──
+  await flushPendingQueue();
 
   let totalSaved = 0, totalSkip = 0, totalError = 0;
   const results = [];

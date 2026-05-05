@@ -36,9 +36,10 @@ const RESUME = arg('--resume', false);
 const RESET_STATE = arg('--reset-state', false);
 const LIMIT = parseInt(arg('--limit', 0), 10) || 0;
 const DAILY_QUOTA_CAP = parseInt(arg('--daily-quota', 9500), 10);
+const VIDEO_ID_FILTER = arg('--video-id', null);  // 특정 영상만 재분류 (예: --video-id=0SGfDKMLdaI)
 
 if (!DRY_RUN && !APPLY && !NOTION_ONLY && !YOUTUBE_ONLY && !RESET_STATE) {
-  console.error('사용: node migrate_classify.js (--dry-run | --apply | --notion-only | --youtube-only | --reset-state) [--limit=N] [--daily-quota=N] [--resume]');
+  console.error('사용: node migrate_classify.js (--dry-run | --apply | --notion-only | --youtube-only | --reset-state) [--limit=N] [--daily-quota=N] [--resume] [--video-id=VIDEO_ID]');
   process.exit(1);
 }
 
@@ -231,6 +232,8 @@ function videoIdFromUrl(url) {
         console.log(`  ⏭  [${pageNum}] videoId 추출 실패 — ${title.slice(0, 40)}`);
         continue;
       }
+
+      if (VIDEO_ID_FILTER && videoId !== VIDEO_ID_FILTER) continue;
 
       try {
         // 1차: 속성에서 직접 읽기 (대부분의 페이지)

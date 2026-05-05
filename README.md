@@ -5,7 +5,20 @@ YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하여 **Notion 
 
 ---
 
-## 🆕 최근 주요 변경사항 (v108)
+## 🆕 최근 주요 변경사항 (v109)
+
+### v109 — pending 큐 자동 소진 + 재분류 도구 개선 (2026-05-05)
+
+**문제**: `pending_playlist_adds.json`에 YouTube 재생목록 미처리 항목 671건이 쌓여 있었으나, 스케줄러가 큐를 읽는 로직이 없어 영구히 방치됨.
+
+**수정**:
+- [`scheduler.js`](scheduler.js): `flushPendingQueue()` 함수 추가. 매 실행 시 Notion 캐시 로드 직후, quota 여유분 내에서 pending 큐를 자동 소진. OAuth 토큰 만료 시 즉시 중단 메시지 출력 후 큐 보존.
+- [`scheduler.js`](scheduler.js): `droppedTopics` 로깅 추가 — Gemini가 반환한 토픽이 `allowedSet` 불일치로 조용히 탈락하는 케이스를 로그로 노출.
+- [`migrate_classify.js`](migrate_classify.js): `--video-id=VIDEO_ID` 옵션 추가 — 특정 영상 1건만 재분류·재적재 가능.
+
+**영상 수동 재분류**: `0SGfDKMLdaI` ("비개발자 바이브코더가 가장 두려워하는 단어 '백엔드'") — Notion 주제 `[]` → `["AI 바이브코딩"]` 완료.
+
+---
 
 ### v108 — CLAUDE.md 도입 + Claude Code 개발환경 세팅 (2026-05-02)
 
