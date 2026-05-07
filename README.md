@@ -5,6 +5,15 @@ YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하여 **Notion 
 
 ---
 
+## 🆕 최근 주요 변경사항 (v110)
+
+### v110 — README 데이터 흐름 mermaid 다이어그램 도입 (2026-05-07)
+
+**변경 내용**: "전체 파이프라인" + "아키텍처" 두 ASCII 다이어그램을 GitHub 자동 렌더링되는 mermaid `flowchart TD` 하나로 통합.
+외부 서비스(YouTube Data API / OAuth, Gemini, Notion, Telegram)와 로컬 산출물(Obsidian Vault) 간 관계를 subgraph로 시각화하여 처음 보는 사람도 데이터 흐름을 한눈에 파악할 수 있도록 개선.
+
+---
+
 ## 🆕 최근 주요 변경사항 (v109)
 
 ### v109 — pending 큐 자동 소진 + 재분류 도구 개선 (2026-05-05)
@@ -182,57 +191,46 @@ node migrate_classify.js --youtube-only --resume   # YouTube 추가 (매일 분�
 
 ## 🏗️ 전체 파이프라인
 
-```
-YouTube 재생목록
-      ↓
- 웹앱 / 스케줄러
-      ↓
- Gemini AI 요약
-      ↓
- Notion DB 저장
-      ↓  (신규 저장 > 0 이면 자동 실행)
- sync_obsidian.py
-  ├── 신규 영상 .md 파일 생성
-  └── build_obsidian_wiki.py
-        ├── 재생목록별 MOC 재구성
-        ├── 채널별 목차 재구성
-        └── 키워드 링크 삽입
-      ↓
- 텔레그램 결과 전송
-  ├── 노션 저장 결과
-  └── Obsidian 동기화 결과
-```
+```mermaid
+flowchart TD
+    USER["👤 사용자\n'AI 영상목록' 재생목록에 영상 추가"]
+    MASTER[("📺 YouTube AI 영상목록")]
+    USER -->|영상 추가| MASTER
 
----
+    subgraph TRIGGER["⏰ 실행 트리거"]
+        SCHED["launchd 스케줄러\n6시간 간격 자동 실행"]
+        WEBUI["웹 UI 버튼\nlocalhost:3000"]
+    end
 
-## 🏛️ 아키텍처
+    SCHED --> ENTRY
+    WEBUI -->|SSE| ENTRY
+    MASTER -->|Data API v3| FETCH
 
-```
-┌─────────────────────────────────────────────┐
-│              웹 앱 (index.html)              │
-│  체크박스 선택 → 선택된 재생목록만 실행       │
-│  완료 후 → POST /api/sync-obsidian 자동 호출 │
-└──────────────┬──────────────────────────────┘
-               │ localhost:3000
-┌──────────────▼──────────────────────────────┐
-│           서버 (server.js)                   │
-│  Notion API 프록시                           │
-│  /api/config  → .env 키 자동 로드            │
-│  /api/sync-obsidian → Python 동기화 트리거   │
-│  로그인 시 자동 시작 (launchd KeepAlive)     │
-└──────────────┬──────────────────────────────┘
-               │
-┌──────────────▼──────────────────────────────┐
-│         스케줄러 (scheduler.js)              │
-│  6시간 간격 자동 실행 (00/06/12/18시)         │
-│  완료 후 → sync_obsidian.py 자동 실행        │
-└──────────────┬──────────────────────────────┘
-               │
-┌──────────────▼──────────────────────────────┐
-│      Obsidian LLM Wiki (Python)             │
-│  sync_obsidian.py  → 신규 .md 증분 추가     │
-│  build_obsidian_wiki.py → MOC + 링크 재구성 │
-└─────────────────────────────────────────────┘
+    subgraph PIPELINE["🤖 마스터 인제스트 파이프라인 (scheduler.js)"]
+        ENTRY["processMasterIngest()"]
+        FETCH["영상 메타 조회\n+ Notion 캐시 로드 · 중복 체크"]
+        GEMINI["lib/classifier.js\nGemini 2.5 Flash\n요약 + 토픽 1~5개 분류"]
+        NSAVE["saveToNotionWithTopics()\n— 영상별 in-loop —"]
+        YSAVE["lib/youtube_oauth.js\nplaylistItems.insert\n— 영상별 in-loop —"]
+        ENTRY --> FETCH --> GEMINI --> NSAVE --> YSAVE
+    end
+
+    NSAVE --> NOTION[("📋 Notion DB\n다중 주제 태그 + 4섹션 요약")]
+    YSAVE -->|"quota 여유"| YT_PL[("📺 YouTube 토픽 재생목록\n33개")]
+    YSAVE -->|"quota 초과"| PENDING[("⏳ pending_playlist_adds.json")]
+    PENDING -->|"다음 실행 시 자동 소진"| YT_PL
+
+    NOTION -->|"모든 영상 처리 완료 후 1회"| SYNC
+
+    subgraph OBS["📓 Obsidian LLM Wiki"]
+        SYNC["sync_obsidian.py\n신규 .md 생성 + tags 갱신"]
+        BUILD["build_obsidian_wiki.py\nMOC + 키워드 허브 27개"]
+        VAULT[("📁 Obsidian Vault\nAI LLM Wiki/")]
+        SYNC --> BUILD --> VAULT
+    end
+
+    VAULT --> TG["📱 Telegram 통합 알림\nNotion 결과 + Obsidian 결과"]
+    YT_PL --> TG
 ```
 
 
@@ -549,6 +547,9 @@ python3 cleanup_duplicates.py
 | v105 | **스케줄러 네트워크 재시도 강화** — `loadNotionCache()`의 재시도 로직이 HTTP 상태 오류만 잡고 DNS 실패(`ENOTFOUND`) 등 네트워크 예외는 `throw`되어 스케줄러 전체 종료. Mac 수면 직후 6시 launchd 기동 시 재현됨. `try/catch`로 네트워크 예외 포착 후 30초 대기 재시도(최대 10회, 약 5분)로 수정 |
 | v106 | **웹 UI 처리 결과 테이블 — AI 영상목록 모드도 채워지도록 수정** — 기존: SSE가 `{ msg: "..." }` 텍스트만 전송해 결과 테이블에 행이 추가되지 않음. `scheduler.js`에서 영상 저장/스킵/오류 시 `RESULT_ROW:{json}` 마커를 stdout에 출력, `server.js`가 이를 `{ row: {...} }` SSE로 분리 전송, `index.html`이 `payload.row` 수신 시 `addRow()` 호출. 결과 테이블에 토픽 배지 포함 요약 표시 |
 | v107 | **분류기 프롬프트: AI 코딩/개발 콘텐츠 → AI 바이브코딩 매핑 추가** — DDD·TDD·기술부채 등 AI 코딩 실천론 영상이 토픽 커버리지 갭으로 분류 누락되던 문제 수정. `lib/classifier.js` 제목 우선 신호에 "AI 코딩/AI 개발 관련 내용 → AI 바이브코딩" 예시 추가. 누락 영상 Notion 수동 재분류 + YouTube pending 큐 추가 |
+| v108 | **CLAUDE.md 도입 + Claude Code 개발환경 세팅** — 주요 명령어, 아키텍처, NFC 정규화·Notion 블록 한계·YouTube quota 등 핵심 제약사항 문서화. `.claude/settings.local.json` 정리 (43개 허용 → 패턴 기반 13개) |
+| v109 | **pending 큐 자동 소진 + 재분류 도구 개선** — `flushPendingQueue()` 추가로 매 실행 시 quota 여유분 내 pending 큐 자동 처리. `droppedTopics` 로깅 추가. `migrate_classify.js --video-id=VIDEO_ID` 단일 영상 재분류 옵션 추가 |
+| v110 | **README 데이터 흐름 mermaid 다이어그램 도입** — ASCII 파이프라인 + 아키텍처 두 다이어그램을 GitHub 자동 렌더링 mermaid `flowchart TD` 하나로 통합. 외부 서비스·산출물 간 관계를 subgraph로 시각화 |
 
 ---
 
