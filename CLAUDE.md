@@ -49,6 +49,7 @@ YouTube "AI 영상목록" (마스터 모드)
     → saveToNotionWithTopics()            [Notion DB 저장]
     → lib/youtube_oauth.js:addToPlaylist() [토픽별 YouTube 재생목록 추가]
     → sync_obsidian.py                    [Obsidian .md 파일 생성/갱신]
+    → wiki_ingest.py                      [Gemini 2.5 Flash, 엔티티/개념 Wiki 페이지 합성]
     → build_obsidian_wiki.py              [MOC + 키워드 허브 재구성]
 ```
 
@@ -63,7 +64,9 @@ YouTube "AI 영상목록" (마스터 모드)
 | `index.html` | 단일 페이지 웹 UI. 재생목록 관리, 마스터 인제스트 트리거, 처리 결과 테이블. |
 | `lib/classifier.js` | Gemini 기반 토픽 분류기. `playlists.json`의 토픽 목록만 허용(allowedSet 필터). 신뢰도 0.6 미만이면 YouTube 추가 건너뜀. |
 | `lib/youtube_oauth.js` | YouTube OAuth2 쓰기 전용. access_token 메모리 캐시(50분), 일일 quota 추적(`.quota_state.json`), 호출 간 200ms rate limit. |
-| `sync_obsidian.py` | Notion DB → Obsidian 증분 동기화. Obsidian vault: `/Users/tycoonan/Documents/Obsidian/AI LLM Wiki/AI LLM Wiki` |
+| `sync_obsidian.py` | Notion DB → Obsidian 증분 동기화. 내부적으로 `wiki_ingest.py`와 연동. |
+| `wiki_ingest.py` | Karpathy LLM Wiki 파이프라인. Obsidian 노트를 순회하며 Gemini로 개념 단위 지식 추출 및 합성. |
+| `wiki_config.py` | Wiki 인제스트 설정 관리. 230 RPD 토큰 제한, API Rate limit 추적 및 예외 처리 로직 포함. |
 | `build_obsidian_wiki.py` | 키워드별 허브 파일 27개 자동 생성(`_MOC/Claude.md` 등) + MOC 재구성. |
 | `migrate_classify.js` | 기존 영상 일괄 재분류. `.migrate_state.json`으로 재개 가능. |
 | `playlists.json` | 33개 토픽 재생목록 목록. 분류기의 허용 토픽 소스이기도 함. |
@@ -89,6 +92,8 @@ YouTube "AI 영상목록" (마스터 모드)
 - `rich_text` 배열 최대 100개 (`parseBoldRichText()` 결과 50개씩 묶어 paragraph 생성).
 
 **YouTube Quota**: 일일 10,000 유닛. `playlistItems.insert`는 50유닛. 임계(9,500유닛) 도달 시 `pending_playlist_adds.json`에 적재 후 다음날 처리.
+
+**Gemini API 최적화 (중요)**: Gemini 2.5 Flash 모델 사용 시 내부 추론 과정에서 과다한 "Thinking 토큰" 과금을 방지하기 위해 반드시 API 호출 옵션에 `generationConfig: { thinkingConfig: { thinkingBudget: 0 } }`를 적용해야 합니다 (비용 85% 절감 효과).
 
 **토픽 추가 시**: `playlists.json`에 새 항목 추가 + `build_obsidian_wiki.py`의 `VALID_NOTION_TAGS` 동기화 필수.
 

@@ -284,13 +284,17 @@ Youtube_Notion_Grap/
 ├── migrate_classify.js                # 기존 영상 일괄 재분류 스크립트 (v102)
 ├── oauth_setup.js                     # YouTube OAuth refresh_token 1회 발급 도구 (v102)
 ├── notion_to_obsidian.js              # Notion → Obsidian 일회성 마이그레이션
-├── sync_obsidian.py                   # Obsidian 증분 동기화 (신규 영상만 추가)
+├── sync_obsidian.py                   # Obsidian 증분 동기화 (신규 영상 추가 및 위키 인제스트 연동)
+├── wiki_ingest.py                     # Gemini 기반 엔티티/개념 위키 페이지 합성 스크립트 (v111)
+├── wiki_config.py                     # Wiki Ingest 공통 설정 및 API 호출 유틸 (v111)
 ├── build_obsidian_wiki.py             # MOC + 채널 목차 + 키워드 링크 빌더
 ├── cleanup_duplicates.py              # 노션/Obsidian 중복 정리 도구
 ├── com.irichgreen.server.plist        # launchd 서버 자동시작 설정
 ├── com.irichgreen.ytsummarizer.plist  # launchd 스케줄러 설정
+├── com.irichgreen.wiki-ingest.plist   # launchd 일일 Wiki 인제스트 스케줄러 (v111)
 ├── install-server.sh                  # 서버 자동시작 설치 스크립트
 ├── install-scheduler.sh               # 스케줄러 설치 스크립트
+├── install-wiki-ingest.sh             # 일일 Wiki 인제스트 스케줄러 설치 스크립트 (v111)
 ├── lib/
 │   ├── youtube_oauth.js               # YouTube OAuth 2.0 + playlistItems.insert (v102)
 │   └── classifier.js                  # Gemini 기반 토픽 분류기 (v102)
