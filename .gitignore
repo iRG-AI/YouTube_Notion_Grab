@@ -19,6 +19,8 @@ node_modules/
 .quota_state.json
 migration_preview.csv
 pending_playlist_adds.json
+.wiki_quota.json
+.wiki_state.json
 
 # Python 캐시
 __pycache__/
