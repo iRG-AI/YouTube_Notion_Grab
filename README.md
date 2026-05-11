@@ -210,8 +210,9 @@ flowchart TD
     USER -->|영상 추가| MASTER
 
     subgraph TRIGGER["⏰ 실행 트리거"]
-        SCHED["launchd 스케줄러\n6시간 간격 자동 실행"]
+        SCHED["launchd 스케줄러\n6시간 간격 (YouTube 인제스트)"]
         WEBUI["웹 UI 버튼\nlocalhost:3000"]
+        WIKI_SCHED["launchd 스케줄러\n매일 03:00 (Wiki 전체 재분석)"]
     end
 
     SCHED --> ENTRY
@@ -233,12 +234,17 @@ flowchart TD
     PENDING -->|"다음 실행 시 자동 소진"| YT_PL
 
     NOTION -->|"모든 영상 처리 완료 후 1회"| SYNC
+    WIKI_SCHED -->|"일일 230 API 제한 준수"| WIKI_INGEST
 
-    subgraph OBS["📓 Obsidian LLM Wiki"]
-        SYNC["sync_obsidian.py\n신규 .md 생성 + tags 갱신"]
-        BUILD["build_obsidian_wiki.py\nMOC + 키워드 허브 27개"]
+    subgraph OBS["📓 Obsidian Karpathy LLM Wiki"]
+        SYNC["sync_obsidian.py\n신규 영상 .md 생성 + tags 갱신"]
+        WIKI_INGEST["wiki_ingest.py\nGemini 2.5 Flash\n개념/엔티티 Wiki 페이지 합성"]
+        BUILD["build_obsidian_wiki.py\nMOC + 키워드 허브 27개 자동 생성"]
         VAULT[("📁 Obsidian Vault\nAI LLM Wiki/")]
-        SYNC --> BUILD --> VAULT
+        
+        SYNC --> WIKI_INGEST
+        WIKI_INGEST --> BUILD
+        BUILD --> VAULT
     end
 
     VAULT --> TG["📱 Telegram 통합 알림\nNotion 결과 + Obsidian 결과"]
