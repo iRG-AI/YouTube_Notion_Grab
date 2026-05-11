@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Karpathy LLM Wiki Ingest 자동 실행
+  매일 03:00에 실행 (scheduler.js 00:00 실행 후 충분한 간격)
+  일일 한도(230회) 도달 시 자동 중단, 다음날 이어서 처리
+
+  ★ 설치: bash install-wiki-ingest.sh
+  ★ 즉시 실행: launchctl start com.irichgreen.wiki-ingest
+  ★ 제거: launchctl unload ~/Library/LaunchAgents/com.irichgreen.wiki-ingest.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.irichgreen.wiki-ingest</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/python3</string>
+    <string>/Users/tycoonan/Documents/Claude/Youtube_Notion_Grap/wiki_ingest.py</string>
+    <string>--full</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/tycoonan/Documents/Claude/Youtube_Notion_Grap</string>
+
+  <!-- 매일 03:00 실행 -->
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key><integer>3</integer>
+    <key>Minute</key><integer>0</integer>
+  </dict>
+
+  <key>StandardOutPath</key>
+  <string>/Users/tycoonan/Documents/Claude/Youtube_Notion_Grap/wiki_ingest.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/tycoonan/Documents/Claude/Youtube_Notion_Grap/wiki_ingest-error.log</string>
+
+  <key>RunAtLoad</key>
+  <false/>
+</dict>
+</plist>

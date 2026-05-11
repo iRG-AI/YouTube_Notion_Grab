@@ -5,6 +5,18 @@ YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하여 **Notion 
 
 ---
 
+## 🆕 최근 주요 변경사항 (v111)
+
+### v111 — Karpathy LLM Wiki 도입 및 Gemini API 비용 최적화 (2026-05-12)
+
+**변경 내용**:
+- **Karpathy Wiki 파이프라인 완성**: `wiki_ingest.py`를 통해 Obsidian 문서를 Gemini 2.5 Flash로 분석하여 엔티티/개념 단위의 Wiki 페이지를 자동 합성하는 기능 구현.
+- **백그라운드 스케줄링**: `sync_obsidian.py`에 Wiki Ingest 기능을 통합하고, `launchd`(`com.irichgreen.wiki-ingest.plist`)를 통해 매일 03:00에 API 제한 한도 내에서 안전하게 증분 업데이트하도록 자동화.
+- **API 한도 및 상태 제어**: 일일 230 RPD 제한을 준수하도록 `.wiki_quota.json` 및 `.wiki_state.json`을 통한 API 호출 추적 및 오류 복구(자동 중단/재개) 로직 적용.
+- **비용 최적화 (핵심)**: 기존 요금 청구서 분석 결과 Gemini 내부 추론 토큰이 비용의 90% 이상을 차지함을 발견. `scheduler.js`, `lib/classifier.js`, `wiki_config.py`, `index.html` 등 **모든 Gemini API 호출부에 `thinkingConfig: { thinkingBudget: 0 }` 설정을 적용하여 토큰 사용량과 API 호출 비용을 약 85% 대폭 절감**.
+
+---
+
 ## 🆕 최근 주요 변경사항 (v110)
 
 ### v110 — README 데이터 흐름 mermaid 다이어그램 도입 (2026-05-07)

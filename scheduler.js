@@ -293,7 +293,10 @@ async function geminiSummarize(v) {
     headers: { 'Content-Type': 'application/json' },
   }, {
     contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.3, maxOutputTokens: 3000 },
+    generationConfig: { 
+      temperature: 0.3, 
+      maxOutputTokens: 2000
+    },
   });
 
   if (res.status !== 200) throw new Error(`Gemini 오류 ${res.status}: ${JSON.stringify(res.data)}`);

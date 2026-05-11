@@ -305,26 +305,6 @@ if __name__ == '__main__':
     else:
         log('ℹ️  신규 영상 없음 — Wiki 재구성 생략')
 
-    # 3단계: Karpathy Wiki Ingest (신규 소스가 있을 때만)
-    wiki_ingested = False
-    wiki_err = ''
-    if added > 0 or force:
-        log('\n🧠 Karpathy Wiki Ingest 실행 중...')
-        wiki_script = os.path.join(SCRIPT_DIR, 'wiki_ingest.py')
-        if os.path.exists(wiki_script):
-            wiki_result = subprocess.run(
-                [sys.executable, wiki_script],
-                capture_output=True, text=True
-            )
-            if wiki_result.returncode != 0:
-                wiki_err = wiki_result.stderr[:200]
-                log(f'❌ Wiki Ingest 오류:\n{wiki_err}')
-            else:
-                wiki_ingested = True
-                log('✅ Wiki Ingest 완료!')
-        else:
-            log('ℹ️  wiki_ingest.py 없음 — 건너뜀')
-
     elapsed = round(time.time() - start)
     log('\n🎉 Obsidian 동기화 완료!')
 

@@ -13,8 +13,13 @@ node scheduler.js              # 마스터 인제스트 모드 (기본)
 node scheduler.js --legacy     # 레거시 33개 재생목록 모드
 
 # Obsidian 동기화
-python3 sync_obsidian.py       # Notion DB → Obsidian .md 파일 증분 동기화
+python3 sync_obsidian.py       # Notion DB → Obsidian .md 파일 증분 동기화 + Wiki Ingest
 python3 build_obsidian_wiki.py # MOC + 키워드 허브 파일 재구성
+
+# Karpathy LLM Wiki
+python3 wiki_ingest.py              # 증분: 미처리 소스만 Wiki 합성
+python3 wiki_ingest.py --full       # 전체: 모든 소스 재분석
+python3 wiki_ingest.py --limit=20   # 테스트: 20개만 처리
 
 # 기존 영상 일괄 마이그레이션
 node migrate_classify.js --dry-run --limit=20
