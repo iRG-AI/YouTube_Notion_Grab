@@ -286,20 +286,34 @@ async function geminiSummarize(v) {
 
 보고서:`;
 
-  const res = await httpsRequest({
-    hostname: 'generativelanguage.googleapis.com',
-    path: `/v1beta/models/gemini-2.5-flash:generateContent?key=${CONFIG.geminiApiKey}`,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-  }, {
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: { 
-      temperature: 0.3, 
-      maxOutputTokens: 2000
-    },
-  });
+  let res;
+  let retries = 3;
+  while (retries > 0) {
+    res = await httpsRequest({
+      hostname: 'generativelanguage.googleapis.com',
+      path: `/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${CONFIG.geminiApiKey}`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    }, {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { 
+        temperature: 0.3, 
+        maxOutputTokens: 2000
+      },
+    });
 
-  if (res.status !== 200) throw new Error(`Gemini 오류 ${res.status}: ${JSON.stringify(res.data)}`);
+    if (res.status === 429) {
+      log(`    ⏳ [Rate Limit] 429 에러 발생. 20초 대기 후 재시도... (남은 재시도: ${retries - 1})`);
+      await new Promise(r => setTimeout(r, 20000));
+      retries--;
+      continue;
+    }
+    
+    if (res.status !== 200) throw new Error(`Gemini 오류 ${res.status}: ${JSON.stringify(res.data)}`);
+    break;
+  }
+  
+  if (res.status !== 200) throw new Error(`Gemini 재시도 초과 오류 ${res.status}: ${JSON.stringify(res.data)}`);
   return res.data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '요약 불가';
 }
 
@@ -707,14 +721,23 @@ async function processMasterIngest(notionCache) {
   }
 
   // ── 2단계: 신규 영상 — 요약 + 분류 + 저장 + YouTube 추가 ──
-  log(`\n  ⚡ 신규 ${newVideos.length}개 처리 시작...`);
-  const PARALLEL = 3;
+  const MAX_NEW_PER_RUN = 15; // 안정성을 위해 15개로 하향 조정
+  const processList = newVideos.slice(0, MAX_NEW_PER_RUN);
+  if (newVideos.length > MAX_NEW_PER_RUN) {
+    log(`\n  ⚠️ 신규 영상이 너무 많습니다 (${newVideos.length}개). 할당량 보호를 위해 상위 ${MAX_NEW_PER_RUN}개만 먼저 처리합니다.`);
+  }
 
-  for (let i = 0; i < newVideos.length; i += PARALLEL) {
-    const batch = newVideos.slice(i, i + PARALLEL);
-    log(`  ⚡ [${i+1}~${Math.min(i+PARALLEL, newVideos.length)}/${newVideos.length}] 병렬 요약 중...`);
+  log(`\n  ⚡ 신규 ${processList.length}개 처리 시작...`);
+  const PARALLEL = 1; // 할당량 보호를 위해 순차 처리로 변경
+
+  for (let i = 0; i < processList.length; i += PARALLEL) {
+    const batch = processList.slice(i, i + PARALLEL);
+    log(`  ⚡ [${i+1}~${Math.min(i+PARALLEL, processList.length)}/${processList.length}] 병렬 요약 중...`);
 
     const summaryResults = await Promise.allSettled(batch.map(v => geminiSummarize(v)));
+    
+    // API 호출 간격 확보 (2초 대기)
+    await new Promise(r => setTimeout(r, 2000));
 
     for (let j = 0; j < batch.length; j++) {
       const v = batch[j];
@@ -904,7 +927,7 @@ async function processPlaylist(pl, notionCache) {
   }
 
   // ── 2단계: 신규 영상 3개씩 병렬 Gemini 요약 → Notion 저장 ──
-  const PARALLEL = 3;
+  const PARALLEL = 1; // 순차 처리로 변경
   if (newVideos.length > 0) {
     log('\n  ⚡ 신규 ' + newVideos.length + '개 Gemini 병렬 요약 시작 (3개씩 동시)...');
   }
@@ -912,6 +935,9 @@ async function processPlaylist(pl, notionCache) {
     const batch = newVideos.slice(i, i + PARALLEL);
     log('  ⚡ [' + (i+1) + '~' + Math.min(i+PARALLEL, newVideos.length) + '/' + newVideos.length + '] 병렬 요약 중...');
     const results = await Promise.allSettled(batch.map(v => geminiSummarize(v)));
+    
+    // API 호출 간격 확보 (2초 대기)
+    await new Promise(r => setTimeout(r, 2000));
     for (let j = 0; j < batch.length; j++) {
       const v = batch[j];
       const res = results[j];

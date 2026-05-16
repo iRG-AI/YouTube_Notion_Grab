@@ -344,6 +344,7 @@ def main():
 
     processed = 0
     errors = 0
+    consecutive_429_errors = 0
 
     for i, source in enumerate(pending):
         try:
@@ -374,6 +375,7 @@ def main():
                 ingested[source['notion_id']] = datetime.now().isoformat()
 
             processed += 1
+            consecutive_429_errors = 0 # 성공 시 에러 카운트 초기화
 
             # 10개마다 중간 저장
             if processed % 10 == 0:
@@ -393,6 +395,12 @@ def main():
             errors += 1
             # Rate limit 오류 시 대기
             if '429' in str(e) or 'RESOURCE_EXHAUSTED' in str(e):
+                consecutive_429_errors += 1
+                if consecutive_429_errors >= 3:
+                    log('\n  🚨 연속적인 429 에러 발생. 일일 할당량이 소진된 것으로 간주하고 종료합니다.')
+                    state['ingested'] = ingested
+                    save_state(state)
+                    break
                 log('  ⏸  Rate limit — 60초 대기...')
                 time.sleep(60)
 
