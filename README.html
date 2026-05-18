@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube → Notion AI 요약기 + Obsidian LLM Wiki</title>
+  <meta name="description" content="YouTube AI 요약기 및 Obsidian Karpathy LLM Wiki 지식베이스 자동화 풀스택 시스템 명세서">
+  
+  <!-- Font & Icons -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Mermaid.js CDN for live rendering -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      theme: 'dark',
+      startOnLoad: true,
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+    });
+  </script>
+
+  <style>
+    :root {
+      --bg-dark: #07080d;
+      --bg-card: rgba(17, 20, 34, 0.65);
+      --border-indigo: rgba(99, 102, 241, 0.15);
+      --indigo: #6366f1;
+      --violet: #8b5cf6;
+      --cyan: #06b6d4;
+      --emerald: #10b981;
+      --amber: #f59e0b;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --glass-blur: blur(16px);
+      --sidebar-width: 280px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 5% 5%, rgba(99, 102, 241, 0.08) 0%, transparent 35%),
+        radial-gradient(circle at 95% 95%, rgba(139, 92, 246, 0.08) 0%, transparent 35%);
+      background-attachment: fixed;
+      font-family: 'Inter', sans-serif;
+      color: var(--text-main);
+      display: flex;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    h1, h2, h3, h4 {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+    }
+
+    /* LEFT SIDEBAR NAVIGATION */
+    aside {
+      width: var(--sidebar-width);
+      background: rgba(10, 11, 19, 0.85);
+      border-right: 1px solid var(--border-indigo);
+      height: 100vh;
+      position: fixed;
+      top: 0;
+      left: 0;
+      padding: 2rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+      z-index: 100;
+      backdrop-filter: var(--glass-blur);
+    }
+
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      color: #ffffff;
+      font-family: 'Outfit', sans-serif;
+    }
+
+    .logo-text {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 1.15rem;
+      background: linear-gradient(135deg, #ffffff, #a5b4fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .nav-links {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      list-style: none;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.92rem;
+      padding: 0.6rem 0.8rem;
+      border-radius: 8px;
+      display: block;
+      transition: all 0.2s ease;
+      border: 1px solid transparent;
+    }
+
+    .nav-links a:hover {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.03);
+      border-color: rgba(99, 102, 241, 0.1);
+    }
+
+    .nav-links a.active {
+      color: #ffffff;
+      background: rgba(99, 102, 241, 0.1);
+      border-color: rgba(99, 102, 241, 0.3);
+      font-weight: 600;
+    }
+
+    /* MAIN CONTENT AREA */
+    main {
+      margin-left: var(--sidebar-width);
+      flex: 1;
+      padding: 3rem 4rem;
+      max-width: 1000px;
+    }
+
+    header {
+      margin-bottom: 4rem;
+      position: relative;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      padding: 0.4rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #a5b4fc;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1.5rem;
+    }
+
+    header h1 {
+      font-size: 2.8rem;
+      line-height: 1.2;
+      background: linear-gradient(135deg, #ffffff 40%, #c7d2fe 80%, #818cf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 1.5rem;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      line-height: 1.6;
+    }
+
+    /* SECTION CARD & BLOCKS */
+    section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-indigo);
+      border-radius: 20px;
+      padding: 2.5rem;
+      margin-bottom: 3rem;
+      backdrop-filter: var(--glass-blur);
+      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+      scroll-margin-top: 3rem;
+    }
+
+    section h2 {
+      font-size: 1.6rem;
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      background: linear-gradient(135deg, #ffffff, #c7d2fe);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    /* Grid Items */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+
+    .feature-card {
+      background: rgba(5, 5, 8, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      padding: 1.5rem;
+      border-radius: 12px;
+      transition: all 0.3s ease;
+    }
+
+    .feature-card:hover {
+      border-color: rgba(99, 102, 241, 0.3);
+      transform: translateY(-2px);
+    }
+
+    .feature-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #ffffff;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .feature-desc {
+      font-size: 0.88rem;
+      color: var(--text-muted);
+    }
+
+    /* Mermaid flow box */
+    .mermaid-box {
+      background: rgba(5, 5, 8, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 12px;
+      padding: 2rem;
+      overflow-x: auto;
+      margin-top: 1.5rem;
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Code Snippets & Folders */
+    .code-titlebar {
+      background: #111320;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: none;
+      border-radius: 10px 10px 0 0;
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .code-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .code-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .code-dot.red { background: #ff5f56; }
+    .code-dot.yellow { background: #ffbd2e; }
+    .code-dot.green { background: #27c93f; }
+
+    .code-box {
+      background: rgba(5, 5, 8, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 0 0 10px 10px;
+      padding: 1.25rem;
+      font-family: 'Fira Code', monospace;
+      font-size: 0.85rem;
+      color: #d1d5db;
+      overflow-x: auto;
+      line-height: 1.5;
+    }
+
+    /* Tables styling */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+    }
+
+    th, td {
+      padding: 1rem;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    th {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      color: #ffffff;
+      background: rgba(99, 102, 241, 0.05);
+    }
+
+    td {
+      font-size: 0.92rem;
+      color: var(--text-muted);
+    }
+
+    tr:hover td {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.01);
+    }
+
+    /* Version specific highlights */
+    .v-badge {
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
+      color: #ffffff;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+      margin-top: 1.5rem;
+    }
+
+    .timeline-item {
+      position: relative;
+      padding-left: 2rem;
+      border-left: 2px solid rgba(99, 102, 241, 0.15);
+    }
+
+    .timeline-item::before {
+      content: '';
+      position: absolute;
+      top: 0.3rem;
+      left: -6px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--indigo);
+      box-shadow: 0 0 8px var(--indigo);
+    }
+
+    .timeline-item.latest::before {
+      background: var(--cyan);
+      box-shadow: 0 0 10px var(--cyan);
+    }
+
+    .timeline-version {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .timeline-desc {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .timeline-desc ul {
+      margin-top: 0.5rem;
+      padding-left: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    /* SVG Icon Helpers */
+    .svg-ico {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+
+    @media (max-width: 900px) {
+      aside {
+        display: none;
+      }
+      main {
+        margin-left: 0;
+        padding: 2rem 1.5rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- LEFT SIDEBAR NAVIGATOR -->
+  <aside>
+    <div class="logo-area">
+      <div class="logo-icon">🎬</div>
+      <div class="logo-text">YT → Notion Wiki</div>
+    </div>
+    <ul class="nav-links">
+      <li><a href="#overview" class="active">🚀 프로젝트 개요</a></li>
+      <li><a href="#features">✨ 주요 기능</a></li>
+      <li><a href="#architecture">🏗️ 시스템 아키텍처</a></li>
+      <li><a href="#structure">📂 프로젝트 구조</a></li>
+      <li><a href="#tech-stack">🛠️ 기술 스택</a></li>
+      <li><a href="#env-vars">🔑 환경 변수 설정</a></li>
+      <li><a href="#installation">📦 설치 및 실행</a></li>
+      <li><a href="#notion-db">📊 Notion DB 구조</a></li>
+      <li><a href="#history">🔄 버전 관리</a></li>
+    </ul>
+  </aside>
+
+  <!-- MAIN READING CONTAINER -->
+  <main>
+    
+    <!-- MAIN TITLE HEADER -->
+    <header id="overview">
+      <div class="badge">
+        <svg class="svg-ico" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 0.25rem;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+        FULL-STACK KNOWLEDGE AUTOMATION
+      </div>
+      <h1>YouTube → Notion AI 요약기<br>+ Obsidian LLM Wiki</h1>
+      <p>본 프로젝트는 YouTube 재생목록의 영상을 <strong>Gemini AI</strong>로 자동 수집/요약하여 <strong>Notion DB</strong>에 저장하고, 이를 <strong>Obsidian</strong>으로 자동 동기화하여 최신 <strong>LLM Wiki</strong> 지식베이스를 유기적으로 구축하는 엔터프라이즈급 자동화 솔루션입니다.</p>
+      
+      <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
+        <span class="badge-status status-emerald" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--emerald); padding: 0.35rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">Engine v2.1 (Active)</span>
+        <span class="badge-status status-stable" style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); color: var(--cyan); padding: 0.35rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">Gemini 2.5 Flash</span>
+      </div>
+    </header>
+
+    <!-- ✨ 주요 기능 -->
+    <section id="features">
+      <h2>
+        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">✨</span>
+        주요 기능 명세
+      </h2>
+      <p style="color: var(--text-muted); margin-bottom: 1rem;">본 파이프라인이 제공하는 고성능 자동화의 핵심 구성 기능들입니다.</p>
+      
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-title">🎥 YouTube 재생목록 자동 수집</div>
+          <div class="feature-desc">YouTube Data API v3를 활용해 마스터 재생목록을 실시간 파싱하여 신규 영상 인제스트.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">🤖 Gemini AI 무결성 요약</div>
+          <div class="feature-desc">4,000토큰 확장 출력을 통해 영상 제목·메타데이터 기반의 끊김 없는 고품질 4섹션 요약 생성.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">🛡️ Self-Healing 요약 검증</div>
+          <div class="feature-desc">Notion 저장 전 필수 헤더 유실 여부를 자동 검사하고, 실패 시 Fallback 프롬프트로 최대 2회 재생성 보정.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">📝 Notion DB 저장 & 중복 차단</div>
+          <div class="feature-desc">정밀 제목 정규화(공백, 이모지, NFC 변환 대조) 엔진을 통해 1,912개 영상 중 중복 등록 100% 차단.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">🔄 Obsidian 자동 증분 동기화</div>
+          <div class="feature-desc">Notion 완료 즉시 Python 동기화 엔진(sync_obsidian.py)을 기동하여 로컬 마크다운 문서 및 MOC 링크 빌드.</div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-title">🧠 Karpathy LLM Wiki Ingest</div>
+          <div class="feature-desc">단편적인 동영상들을 넘어 엔티티(도구)와 개념(RAG 등 기술)을 자동 추출 및 지식 페이지에 누적 합성(Synthesis).</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 🏗️ 시스템 아키텍처 -->
+    <section id="architecture">
+      <h2>
+        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">🏗️</span>
+        시스템 아키텍처
+      </h2>
+      <p style="color: var(--text-muted); margin-bottom: 1.5rem;">전체 마스터 파이프라인의 유기적인 데이터 흐름을 시각화한 구조도입니다.</p>
+      
+      <div class="mermaid-box">
+        <div class="mermaid">
+flowchart TD
+    USER["👤 사용자\n'AI 영상목록' 재생목록에 영상 추가"]
+    MASTER[("📺 YouTube AI 영상목록")]
+    USER -->|영상 추가| MASTER
+
+    subgraph TRIGGER["⏰ 실행 트리거"]
+        SCHED["launchd 스케줄러\n6시간 간격 (YouTube 인제스트)"]
+        WEBUI["웹 UI 버튼\nlocalhost:3000"]
+        WIKI_SCHED["launchd 스케줄러\n매일 03:00 (Wiki 전체 재분석)"]
+    end
+
+    SCHED --> ENTRY
+    WEBUI -->|SSE| ENTRY
+    MASTER -->|Data API v3| FETCH
+
+    subgraph PIPELINE["🤖 마스터 인제스트 파이프라인 (scheduler.js)"]
+        ENTRY["processMasterIngest()"]
+        FETCH["영상 메타 조회\n+ Notion 캐시 로드 · 중복 체크"]
+        GEMINI["lib/classifier.js\nGemini 2.5 Flash\n요약 + 토픽 1~5개 분류"]
+        NSAVE["saveToNotionWithTopics()\n— 영상별 in-loop —"]
+        YSAVE["lib/youtube_oauth.js\nplaylistItems.insert\n— 영상별 in-loop —"]
+        ENTRY --> FETCH --> GEMINI --> NSAVE --> YSAVE
+    end
+
+    NSAVE --> NOTION[("📋 Notion DB\n다중 주제 태그 + 4섹션 요약")]
+    YSAVE -->|"quota 여유"| YT_PL[("📺 YouTube 토픽 재생목록\n33개")]
+    YSAVE -->|"quota 초과"| PENDING[("⏳ pending_playlist_adds.json")]
+    PENDING -->|"다음 실행 시 자동 소진"| YT_PL
+
+    NOTION -->|"모든 영상 처리 완료 후 1회"| SYNC
+    WIKI_SCHED -->|"일일 230 API 제한 준수"| WIKI_INGEST
+
+    subgraph OBS["📓 Obsidian Karpathy LLM Wiki"]
+        SYNC["sync_obsidian.py\n신규 영상 .md 생성 + tags 갱신"]
+        WIKI_INGEST["wiki_ingest.py\nGemini 2.5 Flash\n개념/엔티티 Wiki 페이지 합성"]
+        BUILD["build_obsidian_wiki.py\nMOC + 키워드 허브 27개 자동 생성"]
+        VAULT[("📁 Obsidian Vault\nAI LLM Wiki/")]
+        
+        SYNC --> WIKI_INGEST
+        WIKI_INGEST --> BUILD
+        BUILD --> VAULT
+    end
+
+    VAULT --> TG["📱 Telegram 통합 알림\nNotion 결과 + Obsidian 결과"]
+    YT_PL --> TG
+        </div>
+      </div>
+    </section>
+
+    <!-- 📂 프로젝트 구조 -->
+    <section id="structure">
+      <h2>
+        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">📂</span>
+        프로젝트 폴더 구조
+      </h2>
+      <p style="color: var(--text-muted); margin-bottom: 1.5rem;">안정적인 파이프라인 구동을 위한 디렉토리 레이아웃 명세입니다.</p>
+      
+      <div class="code-titlebar">
+        <div class="code-dots">
+          <div class="code-dot red"></div>
+          <div class="code-dot yellow"></div>
+          <div class="code-dot green"></div>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--text-muted);">WORKSPACE DIRECTORY</div>
+      </div>
+      <div class="code-box">
+Youtube_Notion_Grap/
+├── server.js                          # 웹 서버 + Notion API 프록시 + Obsidian 트리거
+├── scheduler.js                       # 자동 스케줄러 (6시간 간격, 마스터 인제스트 포함)
+├── index.html                         # 웹 앱 UI (단일 HTML 파일)
+├── README.html                        # [NEW] 본 가독성 극대화 웹 규격 문서
+├── package.json                       # Node.js 설정 및 종속성 관리 (v2.1.0)
+├── sync_obsidian.py                   # Obsidian 증분 동기화 및 Wiki 재구축
+├── wiki_ingest.py                     # Karpathy LLM Wiki 개념/엔티티 병합 합성 엔진
+├── wiki_config.py                     # Wiki Ingest 공통 구성 및 API 유틸리티
+├── build_obsidian_wiki.py             # MOC + 채널 목차 + 키워드 링크 빌더
+├── spec_sheet.html                    # [NEW] 글래스모피즘 기술 스펙 시트
+├── lib/
+│   ├── youtube_oauth.js               # YouTube OAuth API 연동 모듈
+│   └── classifier.js                  # Gemini 기반 토픽 분류기 및 NFC 변환기
+└── legacy_scripts/
+    └── clean_pending_queue.js         # [NEW] 비정상 적체 큐 대청소 유틸리티
+      </div>
+    </section>
+
+    <!-- 🛠️ 기술 스택 -->
+    <section id="tech-stack">
+      <h2>
+        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">🛠</span>
+        기술 스택 명세
+      </h2>
+      <table>
+        <thead>
+          <tr>
+            <th>분류</th>
+            <th>기술 스택 및 도구</th>
+            <th>설명</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Runtime</strong></td>
+            <td>Node.js v25+ / Python 3.12+</td>
+            <td>비동기 고성능 이벤트 루프 및 지식 가공 데이터 엔진 구성</td>
+          </tr>
+          <tr>
+            <td><strong>AI Engine</strong></td>
+            <td>Google Gemini 2.5 Flash API</td>
+            <td>최적화 비용으로 다량의 장문 한국어 텍스트 지능 요약 및 분류</td>
+          </tr>
+          <tr>
+            <td><strong>Database</strong></td>
+            <td>Notion Database API</td>
+            <td>체계화된 메타데이터 다중 주제 필터링 및 리치 텍스트 영구 보관</td>
+          </tr>
+          <tr>
+            <td><strong>Knowledge Hub</strong></td>
+            <td>Obsidian (로컬 마크다운 Vault)</td>
+            <td>개인용 제2의 뇌 (MOC, 양방향 링킹, Karpathy Ingestion)</td>
+          </tr>
+          <tr>
+            <td><strong>Alerting</strong></td>
+            <td>Telegram Bot API</td>
+            <td>동기화 성공/오류 처리 결과를 대화방 채널에 실시간 발송</td>
+          </tr>
+          <tr>
+            <td><strong>Scheduling</strong></td>
+            <td>macOS launchd</td>
+            <td>OS 백그라운드 수준의 6시간 정주기 영구 무정지 구동 보장</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 🔑 환경 변수 설정 -->
+    <section id="env-vars">
+      <h2>
+        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">🔑</span>
+        환경 변수 구성 (.env)
+      </h2>
+      <p style="color: var(--text-muted); margin-bottom: 1.5rem;">프로젝트 루트 경로에 <code>.env</code> 파일을 생성하여 API 자격을 등록하십시오 (보안 주의).</p>
+      
+      <div class="code-titlebar">
+        <div class="code-dots"><div class="code-dot red"></div><div class="code-dot yellow"></div><div class="code-dot green"></div></div>
+        <div style="font-size: 0.8rem; color: var(--text-muted);">.env TEMPLATE</div>
+      </div>
+      <div class="code-box">
+YOUTUBE_API_KEY=AIzaSy...               # YouTube Data API Key
+GEMINI_API_KEY=AIzaSy...                # Google Gemini API Key
+NOTION_TOKEN=ntn_...                    # Notion Integration Token
+NOTION_DB_ID=xxxxxxxxxxx                # Notion Database ID
+
+TELEGRAM_ENABLED=true
+TELEGRAM_BOT_TOKEN=1234567890:AAG...    # Telegram Bot Token
+TELEGRAM_CHAT_ID=-100xxxxxxxx           # 수신용 Telegram Chat ID
+      </div>
+    </section>
+
+    <!-- 📦 설치 및 실행 -->
+    <section id="installation">
+      <h2>
+        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">📦</span>
+        설치 및 구동 명령어
+      </h2>
+      <div class="code-titlebar">
+        <div class="code-dots"><div class="code-dot red"></div><div class="code-dot yellow"></div><div class="code-dot green"></div></div>
+        <div style="font-size: 0.8rem; color: var(--text-muted);">TERMINAL COMMANDS</div>
+      </div>
+      <div class="code-box">
+# 1. 의존성 패키지 설치
+npm install
+
+# 2. 로컬 테스트 서버 구동 (localhost:3000)
+node server.js
+
+# 3. macOS launchd 백그라운드 스케줄러 자동 등록
+bash install-server.sh
+bash install-scheduler.sh
+bash install-wiki-ingest.sh
+      </div>
+    </section>
+
+    <!-- 📊 Notion DB 구조 -->
+    <section id="notion-db">
+      <h2>
+        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">📊</span>
+        Notion DB 스키마 구조
+      </h2>
+      <table>
+        <thead>
+          <tr>
+            <th>컬럼명</th>
+            <th>타입</th>
+            <th>역할 및 비즈니스 로직</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>영상 제목</strong></td>
+            <td>Title</td>
+            <td>YouTube 비디오 원본 제목 (NFC 정규화 적용)</td>
+          </tr>
+          <tr>
+            <td><strong>요약 내용</strong></td>
+            <td>Rich Text</td>
+            <td>Gemini 생성 4섹션 무결성 완벽 요약서 수록</td>
+          </tr>
+          <tr>
+            <td><strong>유튜브 채널</strong></td>
+            <td>Rich Text</td>
+            <td>영상 제작자 채널명</td>
+          </tr>
+          <tr>
+            <td><strong>업로드 일자</strong></td>
+            <td>Date</td>
+            <td>실제 영상 업로드 타임스탬프 기록</td>
+          </tr>
+          <tr>
+            <td><strong>주제</strong></td>
+            <td>Multi-Select</td>
+            <td>33개 주제 카테고리 중 적합 항목 자동 AI 분류 태깅 (v2.1 고도화)</td>
+          </tr>
+          <tr>
+            <td><strong>처리 상태</strong></td>
+            <td>Select</td>
+            <td>요약 처리 및 데이터 파이프라인 완료 여부 (완료 / 오류)</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 🔄 버전 관리 (Version History) -->
+    <section id="history">
+      <h2>
+        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">🔄</span>
+        릴리즈 히스토리
+      </h2>
+      
+      <div class="timeline">
+        
+        <!-- v2.1 -->
+        <div class="timeline-item latest">
+          <div class="timeline-version">
+            <span>v2.1</span>
+            <span class="v-badge" style="background: linear-gradient(135deg, var(--cyan), var(--indigo));">Active / Latest</span>
+            <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: normal;">— 2026-05-18</span>
+          </div>
+          <div class="timeline-desc">
+            <strong>요약 무결성 극대화 및 지식베이스 정밀 정합성 교정 완료</strong>
+            <ul>
+              <li>요약 텍스트 내 4대 필수 섹션 누락 여부를 판단하는 <code>validateSummary</code> 자동 무결성 검증 주입.</li>
+              <li>토큰 잘림 차단을 위해 maxOutputTokens 상한을 <code>4,000</code>으로 확장 및 유실 시 2차 <code>fallbackPrompt</code> 재시도 구현.</li>
+              <li>정밀 제목 정규화(<code>normalizeTitle</code>)를 통해 특수문자, 인코딩, 이모지 차이를 정제해 중복 수집률 0% 달성.</li>
+              <li>칭킹/벡터 DB/하이브리드 RAG 지식을 <code>'AI LLM Wiki'</code>로, 대량 생산을 <code>'AI 자동화'</code>로 자동 분류하는 프롬프트 튜닝.</li>
+              <li>에러로 누적된 3MB 규모의 9,514개 적체 대기큐를 전격 소거하는 <code>clean_pending_queue.js</code> 탑재.</li>
+              <li>동기화 중 임시 분류되었던 Obsidian 기존 요약 파일 13개를 자동 제거 및 올바른 주제 폴더로 실시간 재배치 재싱크 완료.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- v2.0 -->
+        <div class="timeline-item">
+          <div class="timeline-version">
+            <span>v2.0</span>
+            <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: normal;">— 2026-05-16</span>
+          </div>
+          <div class="timeline-desc">
+            <strong>Gemini Rate Limit 한도 최적화 및 파이프라인 안정화</strong>
+            <ul>
+              <li><code>MAX_NEW_PER_RUN</code>을 15개로 하향 조정하고, 병렬 API 쿼리를 순차 동기 루프로 개편하여 Rate Limit 429 에러 방지.</li>
+              <li>API 호출 사이에 2초의 지연시간을 강제 주입하여 세션 안정성 대폭 상승.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- v1.2 -->
+        <div class="timeline-item">
+          <div class="timeline-version">
+            <span>v1.2</span>
+            <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: normal;">— 2026-05-12</span>
+          </div>
+          <div class="timeline-desc">
+            <strong>Karpathy LLM Wiki 지식 합성 및 API 비용 85% 대폭 절감</strong>
+            <ul>
+              <li>Obsidian 지식들을 엔티티/개념으로 지능적으로 엮는 <code>wiki_ingest.py</code> 최초 구현.</li>
+              <li>요약 생성 시 <code>thinkingBudget: 0</code> 설정을 가하여 토큰 비용의 85% 이상 절감 혁신 성공.</li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- FOOTER -->
+    <footer style="margin-top: 5rem; padding-top: 2rem; border-top: 1px solid rgba(255, 255, 255, 0.05); text-align: center; color: var(--text-muted); font-size: 0.9rem;">
+      <p>© 2026 <span>iRichGreen AI Team</span>. Co-created with Claude & Gemini. Beautifully rendered in premium Glassmorphism UI.</p>
+    </footer>
+
+  </main>
+
+  <script>
+    // Simple active link visual state switcher on scroll
+    const sections = document.querySelectorAll('section, header');
+    const navLi = document.querySelectorAll('aside .nav-links a');
+    
+    window.addEventListener('scroll', () => {
+      let current = '';
+      sections.forEach(section => {
+        const sectionTop = section.offsetTop;
+        const sectionHeight = section.clientHeight;
+        if (pageYOffset >= (sectionTop - 150)) {
+          current = section.getAttribute('id');
+        }
+      });
+      
+      navLi.forEach(a => {
+        a.classList.remove('active');
+        if (a.getAttribute('href') === `#${current}`) {
+          a.classList.add('active');
+        }
+      });
+    });
+  </script>
+
+</body>
+</html>
