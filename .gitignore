@@ -18,7 +18,7 @@ node_modules/
 .migrate_state.json
 .quota_state.json
 migration_preview.csv
-pending_playlist_adds.json
+pending_playlist_adds.json*
 .wiki_quota.json
 .wiki_state.json
 

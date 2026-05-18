@@ -25,9 +25,36 @@ function loadEnv() {
 }
 loadEnv();
 
+// ── Gemini 다중 API Key 로더 및 상태 관리 ──
+const getGeminiKeys = () => {
+  const keysStr = process.env.GEMINI_API_KEYS || '';
+  if (keysStr) {
+    return keysStr.split(',').map(k => k.trim()).filter(Boolean);
+  }
+  return [process.env.GEMINI_API_KEY || ''].filter(Boolean);
+};
+
+let currentGeminiKeyIdx = 0;
+
+function getActiveGeminiKey() {
+  const keys = CONFIG.geminiApiKeys;
+  if (!keys || keys.length === 0) return '';
+  return keys[currentGeminiKeyIdx % keys.length];
+}
+
+function rotateGeminiKey() {
+  const keys = CONFIG.geminiApiKeys;
+  if (!keys || keys.length <= 1) return false;
+  const oldKeyIdx = currentGeminiKeyIdx;
+  currentGeminiKeyIdx = (currentGeminiKeyIdx + 1) % keys.length;
+  log(`      🔄 [API Key Rotation] API 키 교체 ➔ (Key #${oldKeyIdx + 1} ➔ Key #${currentGeminiKeyIdx + 1})`);
+  return true;
+}
+
 const CONFIG = {
   youtubeApiKey:        process.env.YOUTUBE_API_KEY             || '',
-  geminiApiKey:         process.env.GEMINI_API_KEY              || '',
+  geminiApiKey:         process.env.GEMINI_API_KEY              || '', // 하위 호환성용
+  geminiApiKeys:        getGeminiKeys(),                        // 다중 키 배열
   notionToken:          process.env.NOTION_TOKEN                || '',
   notionDbId:           process.env.NOTION_DB_ID                || '',
   masterPlaylistId:     process.env.YOUTUBE_MASTER_PLAYLIST_ID  || '',
@@ -245,9 +272,40 @@ async function getSubs(channelId) {
   return parseInt(d.items?.[0]?.statistics?.subscriberCount || 0);
 
 }
+// ── 요약 무결성 검증 함수 ──
+function validateSummary(summary) {
+  if (!summary || summary === '요약 불가') return false;
+  const requiredSections = [
+    '## 영상 개요',
+    '## 핵심 내용',
+    '## 주요 인사이트',
+    '## 활용 포인트'
+  ];
+  // 4가지 섹션 헤더가 모두 포함되어 있는지 검증
+  const hasAllHeaders = requiredSections.every(sec => summary.includes(sec));
+  if (!hasAllHeaders) return false;
+
+  // 마지막 섹션인 '## 활용 포인트' 밑에 내용이 충분히 채워졌는지 검증 (10자 이상)
+  const partIndex = summary.indexOf('## 활용 포인트');
+  const partContent = summary.slice(partIndex + '## 활용 포인트'.length).trim();
+  if (partContent.length < 10) return false;
+
+  return true;
+}
+
+// ── 제목 정규화 헬퍼 (중복 감지 신뢰도 향상) ──
+function normalizeTitle(t) {
+  if (!t) return '';
+  return t
+    .normalize('NFC')
+    .toLowerCase()
+    .replace(/[\s\p{P}\p{S}]/gu, '') // 공백, 기호, 이모지 등 모두 제거해 매칭률 극대화
+    .trim();
+}
+
 // ── Gemini 요약 ──
 async function geminiSummarize(v) {
-  const prompt = `당신은 YouTube 영상 콘텐츠를 분석하는 전문 리서처입니다.
+  const basePrompt = `당신은 YouTube 영상 콘텐츠를 분석하는 전문 리서처입니다.
 아래 영상 정보를 바탕으로 경영진이 읽는 보고서를 한국어로 작성해주세요.
 
 [절대 규칙]
@@ -286,35 +344,115 @@ async function geminiSummarize(v) {
 
 보고서:`;
 
-  let res;
-  let retries = 3;
-  while (retries > 0) {
-    res = await httpsRequest({
-      hostname: 'generativelanguage.googleapis.com',
-      path: `/v1beta/models/gemini-2.0-flash-lite:generateContent?key=${CONFIG.geminiApiKey}`,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    }, {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { 
-        temperature: 0.3, 
-        maxOutputTokens: 2000
-      },
-    });
+  const fallbackPrompt = `당신은 YouTube 영상 콘텐츠를 분석하는 전문 리서처입니다.
+[🚨 중요: 이번에는 텍스트가 절대 짤리지 않도록 각 섹션을 중언부언하지 말고 매우 간결하고 밀도 높은 한국어 문장(핵심당 1문장 내외)으로 짧게 완성해 주세요.]
 
-    if (res.status === 429) {
-      log(`    ⏳ [Rate Limit] 429 에러 발생. 20초 대기 후 재시도... (남은 재시도: ${retries - 1})`);
-      await new Promise(r => setTimeout(r, 20000));
-      retries--;
-      continue;
+[절대 규칙]
+- 반드시 아래 4개 섹션을 모두 작성할 것 (하나라도 빠지면 안 됨)
+- 각 섹션 제목은 반드시 ## 로 시작할 것
+- 핵심 내용과 주요 인사이트는 반드시 * 로 시작하는 항목으로 작성할 것
+- 절대로 중간에 끊지 말고 4개 섹션을 모두 완벽히 완성할 것
+
+[작성 형식]
+## 영상 개요
+(이 영상이 다루는 주제와 목적을 핵심 위주로 정확히 2문장으로 요약)
+
+## 핵심 내용
+* **[핵심 키워드1]**: (구체적인 설명 1문장)
+* **[핵심 키워드2]**: (구체적인 설명 1문장)
+* **[핵심 키워드3]**: (구체적인 설명 1문장)
+(반드시 3개 이상 항목 작성)
+
+## 주요 인사이트
+* **[인사이트1]**: (비즈니스/실무 관점의 핵심 시사점 1문장)
+* **[인사이트2]**: (비즈니스/실무 관점의 핵심 시사점 1문장)
+(반드시 2개 이상 항목 작성)
+
+## 활용 포인트
+(이 영상의 내용을 실무나 의사결정에 어떻게 활용할 수 있는지 구체적으로 1~2문장 작성)
+
+[영상 정보]
+제목: ${v.title}
+채널: ${v.channelTitle}
+설명: ${v.description || '(없음)'}
+태그: ${v.tags?.join(', ') || '(없음)'}
+
+보고서:`;
+
+  let finalSummary = '요약 불가';
+  let qualityAttempt = 0;
+  const maxQualityAttempts = 3;
+
+  while (qualityAttempt < maxQualityAttempts) {
+    const isFallback = qualityAttempt > 0;
+    const prompt = isFallback ? fallbackPrompt : basePrompt;
+    
+    if (isFallback) {
+      log(`    ⚠️ [요약 무결성 검증 실패] 주요 섹션 유실 감지 ➔ 간결한 Fallback 프롬프트로 재시도 (${qualityAttempt}/${maxQualityAttempts - 1})`);
+    }
+
+    let res;
+    const keysCount = CONFIG.geminiApiKeys.length;
+    const maxAttempts = Math.max(3, keysCount * 2);
+    let attempt = 0;
+
+    while (attempt < maxAttempts) {
+      const currentKey = getActiveGeminiKey();
+      const maskedKey = currentKey ? `${currentKey.slice(0, 8)}...${currentKey.slice(-6)}` : '없음';
+
+      res = await httpsRequest({
+        hostname: 'generativelanguage.googleapis.com',
+        path: `/v1beta/models/gemini-2.5-flash:generateContent?key=${currentKey}`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      }, {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { 
+          temperature: 0.3, 
+          maxOutputTokens: 4000 // 한글 출력 짤림 방지를 위해 2000 ➔ 4000 상향
+        },
+      });
+
+      if (res.status === 429) {
+        attempt++;
+        if (keysCount > 1 && attempt < keysCount) {
+          log(`    ⏳ [Rate Limit] 429 에러 발생 (Key: ${maskedKey}). 대기 없이 다음 API Key로 즉시 교체 시도... (시도: ${attempt}/${maxAttempts})`);
+          rotateGeminiKey();
+          await new Promise(r => setTimeout(r, 500));
+          continue;
+        } else {
+          log(`    ⏳ [Rate Limit] 429 에러 지속 발생 (Key: ${maskedKey}). 20초 대기 후 순환 재시도... (시도: ${attempt}/${maxAttempts})`);
+          rotateGeminiKey();
+          await new Promise(r => setTimeout(r, 20000));
+          continue;
+        }
+      }
+      
+      if (res.status !== 200) {
+        attempt++;
+        log(`    ⚠️  Gemini API 에러 ${res.status} (Key: ${maskedKey}). 3초 대기 후 다음 키로 교체 시도...`);
+        rotateGeminiKey();
+        await new Promise(r => setTimeout(r, 3000));
+        continue;
+      }
+      break;
     }
     
-    if (res.status !== 200) throw new Error(`Gemini 오류 ${res.status}: ${JSON.stringify(res.data)}`);
-    break;
+    if (res.status !== 200) throw new Error(`Gemini 재시도 초과 오류 ${res.status}: ${JSON.stringify(res.data)}`);
+    
+    const candidateText = res.data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '요약 불가';
+    
+    if (validateSummary(candidateText)) {
+      finalSummary = candidateText;
+      log(`    ✓ 요약 무결성 검증 통과!`);
+      break;
+    } else {
+      finalSummary = candidateText;
+      qualityAttempt++;
+    }
   }
-  
-  if (res.status !== 200) throw new Error(`Gemini 재시도 초과 오류 ${res.status}: ${JSON.stringify(res.data)}`);
-  return res.data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '요약 불가';
+
+  return finalSummary;
 }
 
 // ── Notion API 호출 ──
@@ -351,7 +489,6 @@ async function loadNotionCache() {
     try {
       res = await notionCall('POST', `/v1/databases/${CONFIG.notionDbId}/query`, body);
     } catch (netErr) {
-      // DNS/네트워크 레벨 오류 (ENOTFOUND, ETIMEDOUT 등) → 재시도
       retryCount++;
       const isNetErr = netErr.code === 'ENOTFOUND' || netErr.code === 'ETIMEDOUT'
                     || netErr.code === 'ECONNREFUSED' || netErr.code === 'ECONNRESET';
@@ -369,9 +506,9 @@ async function loadNotionCache() {
         break;
       }
       await new Promise(r => setTimeout(r, 2000 * retryCount));
-      continue; // cursor 유지한 채 재시도
+      continue;
     }
-    retryCount = 0; // 성공 시 재시도 카운터 초기화
+    retryCount = 0;
     for (const page of (res.data?.results || [])) {
       const props = page.properties || {};
       const title = (props['영상 제목']?.title || []).map(t => t.text?.content || '').join('');
@@ -379,21 +516,22 @@ async function loadNotionCache() {
       const vidMatch = videoUrl.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
       const videoId = vidMatch ? vidMatch[1] : '';
       if (!videoId && !title) continue;
-      const key = videoId || title;
-      if (!cache.has(key)) {
-        const entry = {
-          pageId:           page.id,
-          title:            title,
-          topics:           (props['주제']?.multi_select || []).map(t => (t.name || '').normalize('NFC')),
-          savedViewCount:   props['조회수']?.number ?? null,
-          savedSubscribers: props['구독자수']?.number ?? null,
-          savedDate:        props['업로드 일자']?.date?.start ?? null,
-        };
-        cache.set(key, entry);
-        if (videoId && title && !cache.has(title)) {
-          cache.set(title, entry);
-        }
-      }
+      
+      const entry = {
+        pageId:           page.id,
+        title:            title,
+        topics:           (props['주제']?.multi_select || []).map(t => (t.name || '').normalize('NFC')),
+        savedViewCount:   props['조회수']?.number ?? null,
+        savedSubscribers: props['구독자수']?.number ?? null,
+        savedDate:        props['업로드 일자']?.date?.start ?? null,
+      };
+
+      if (videoId) cache.set(videoId, entry);
+      if (title) cache.set(title, entry);
+      
+      // 정규화된 제목 보조 키 등록 (공백/이모지 방지)
+      const normTitle = normalizeTitle(title);
+      if (normTitle) cache.set(normTitle, entry);
     }
     total += res.data?.results?.length || 0;
     cursor = res.data?.next_cursor;
@@ -403,10 +541,14 @@ async function loadNotionCache() {
   return cache;
 }
 
-// ── 중복 체크 (videoId 우선, 없으면 title로 fallback) ──
+// ── 중복 체크 (videoId 우선, 없으면 정규화된 title로 fallback) ──
 function findDuplicate(video, cache) {
   if (video.videoId && cache.has(video.videoId)) return cache.get(video.videoId);
-  if (video.title && cache.has(video.title)) return cache.get(video.title);
+  if (video.title) {
+    if (cache.has(video.title)) return cache.get(video.title);
+    const normTitle = normalizeTitle(video.title);
+    if (cache.has(normTitle)) return cache.get(normTitle);
+  }
   return null;
 }
 
@@ -721,14 +863,14 @@ async function processMasterIngest(notionCache) {
   }
 
   // ── 2단계: 신규 영상 — 요약 + 분류 + 저장 + YouTube 추가 ──
-  const MAX_NEW_PER_RUN = 15; // 안정성을 위해 15개로 하향 조정
+  const MAX_NEW_PER_RUN = 15;
   const processList = newVideos.slice(0, MAX_NEW_PER_RUN);
   if (newVideos.length > MAX_NEW_PER_RUN) {
     log(`\n  ⚠️ 신규 영상이 너무 많습니다 (${newVideos.length}개). 할당량 보호를 위해 상위 ${MAX_NEW_PER_RUN}개만 먼저 처리합니다.`);
   }
 
   log(`\n  ⚡ 신규 ${processList.length}개 처리 시작...`);
-  const PARALLEL = 1; // 할당량 보호를 위해 순차 처리로 변경
+  const PARALLEL = 1;
 
   for (let i = 0; i < processList.length; i += PARALLEL) {
     const batch = processList.slice(i, i + PARALLEL);
@@ -746,10 +888,11 @@ async function processMasterIngest(notionCache) {
         if (sRes.status === 'rejected') throw new Error(sRes.reason?.message || '요약 실패');
         const summary = sRes.value;
 
-        // 분류
+        // 분류 (현재 활성화된 로테이션된 API Key 주입)
         const cls = await classifier.classifyTopics(
           { summary, title: v.title, channel: v.channelTitle },
-          availableTopics
+          availableTopics,
+          { geminiApiKey: getActiveGeminiKey() }
         );
         const topics = cls.topics;  // 분류된 토픽들
         const allTopics = [...topics];  // 분류 토픽만 (AI 영상목록은 재생목록이지 주제 태그 아님)
