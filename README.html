@@ -4,38 +4,30 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>YouTube → Notion AI 요약기 + Obsidian LLM Wiki</title>
-  <meta name="description" content="YouTube AI 요약기 및 Obsidian Karpathy LLM Wiki 지식베이스 자동화 풀스택 시스템 명세서">
+  <meta name="description" content="YouTube AI 요약기 및 Obsidian Karpathy LLM Wiki 지식베이스 자동화 풀스택 시스템 명세서 (라이트 테마)">
   
   <!-- Font & Icons -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  
-  <!-- Mermaid.js CDN for live rendering -->
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-  <script>
-    mermaid.initialize({
-      theme: 'dark',
-      startOnLoad: true,
-      securityLevel: 'loose',
-      flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
-    });
-  </script>
 
   <style>
     :root {
-      --bg-dark: #07080d;
-      --bg-card: rgba(17, 20, 34, 0.65);
-      --border-indigo: rgba(99, 102, 241, 0.15);
-      --indigo: #6366f1;
-      --violet: #8b5cf6;
-      --cyan: #06b6d4;
-      --emerald: #10b981;
-      --amber: #f59e0b;
-      --text-main: #f3f4f6;
-      --text-muted: #9ca3af;
-      --glass-blur: blur(16px);
+      --bg-light: #f8fafc;
+      --bg-card: rgba(255, 255, 255, 0.85);
+      --border-indigo: rgba(99, 102, 241, 0.12);
+      --indigo: #4f46e5;
+      --violet: #7c3aed;
+      --cyan: #0891b2;
+      --emerald: #059669;
+      --amber: #d97706;
+      --rose: #e11d48;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --glass-blur: blur(20px);
       --sidebar-width: 280px;
+      --sidebar-bg: #ffffff;
+      --card-shadow: 0 10px 30px -10px rgba(99, 102, 241, 0.08), 0 1px 3px rgba(99, 102, 241, 0.02);
     }
 
     * {
@@ -46,10 +38,10 @@
     }
 
     body {
-      background-color: var(--bg-dark);
+      background-color: var(--bg-light);
       background-image: 
-        radial-gradient(circle at 5% 5%, rgba(99, 102, 241, 0.08) 0%, transparent 35%),
-        radial-gradient(circle at 95% 95%, rgba(139, 92, 246, 0.08) 0%, transparent 35%);
+        radial-gradient(circle at 5% 5%, rgba(99, 102, 241, 0.04) 0%, transparent 40%),
+        radial-gradient(circle at 95% 95%, rgba(124, 58, 237, 0.04) 0%, transparent 40%);
       background-attachment: fixed;
       font-family: 'Inter', sans-serif;
       color: var(--text-main);
@@ -62,14 +54,14 @@
       font-family: 'Outfit', sans-serif;
       font-weight: 700;
       letter-spacing: -0.02em;
-      color: #ffffff;
+      color: #0f172a;
     }
 
-    /* LEFT SIDEBAR NAVIGATION */
+    /* LEFT SIDEBAR NAVIGATION (LIGHT MODE) */
     aside {
       width: var(--sidebar-width);
-      background: rgba(10, 11, 19, 0.85);
-      border-right: 1px solid var(--border-indigo);
+      background: var(--sidebar-bg);
+      border-right: 1px solid rgba(99, 102, 241, 0.08);
       height: 100vh;
       position: fixed;
       top: 0;
@@ -79,7 +71,7 @@
       flex-direction: column;
       gap: 2rem;
       z-index: 100;
-      backdrop-filter: var(--glass-blur);
+      box-shadow: 2px 0 20px rgba(0, 0, 0, 0.02);
     }
 
     .logo-area {
@@ -105,7 +97,7 @@
       font-family: 'Outfit', sans-serif;
       font-weight: 700;
       font-size: 1.15rem;
-      background: linear-gradient(135deg, #ffffff, #a5b4fc);
+      background: linear-gradient(135deg, var(--indigo), var(--violet));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
@@ -128,18 +120,18 @@
       display: block;
       transition: all 0.2s ease;
       border: 1px solid transparent;
+      font-weight: 500;
     }
 
     .nav-links a:hover {
-      color: #ffffff;
-      background: rgba(255, 255, 255, 0.03);
-      border-color: rgba(99, 102, 241, 0.1);
+      color: var(--indigo);
+      background: rgba(99, 102, 241, 0.03);
     }
 
     .nav-links a.active {
-      color: #ffffff;
-      background: rgba(99, 102, 241, 0.1);
-      border-color: rgba(99, 102, 241, 0.3);
+      color: var(--indigo);
+      background: rgba(99, 102, 241, 0.06);
+      border-color: rgba(99, 102, 241, 0.15);
       font-weight: 600;
     }
 
@@ -160,13 +152,13 @@
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
-      border: 1px solid rgba(99, 102, 241, 0.3);
+      background: rgba(99, 102, 241, 0.06);
+      border: 1px solid rgba(99, 102, 241, 0.15);
       padding: 0.4rem 1rem;
       border-radius: 9999px;
       font-size: 0.8rem;
       font-weight: 600;
-      color: #a5b4fc;
+      color: var(--indigo);
       text-transform: uppercase;
       letter-spacing: 0.05em;
       margin-bottom: 1.5rem;
@@ -175,7 +167,7 @@
     header h1 {
       font-size: 2.8rem;
       line-height: 1.2;
-      background: linear-gradient(135deg, #ffffff 40%, #c7d2fe 80%, #818cf8 100%);
+      background: linear-gradient(135deg, #0f172a 40%, var(--indigo) 90%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       margin-bottom: 1.5rem;
@@ -195,7 +187,7 @@
       padding: 2.5rem;
       margin-bottom: 3rem;
       backdrop-filter: var(--glass-blur);
-      box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+      box-shadow: var(--card-shadow);
       scroll-margin-top: 3rem;
     }
 
@@ -203,8 +195,8 @@
       font-size: 1.6rem;
       margin-bottom: 1.5rem;
       padding-bottom: 0.75rem;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-      background: linear-gradient(135deg, #ffffff, #c7d2fe);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+      background: linear-gradient(135deg, #0f172a, var(--indigo));
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       display: flex;
@@ -221,22 +213,24 @@
     }
 
     .feature-card {
-      background: rgba(5, 5, 8, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.03);
+      background: #ffffff;
+      border: 1px solid rgba(99, 102, 241, 0.05);
       padding: 1.5rem;
       border-radius: 12px;
       transition: all 0.3s ease;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.01), 0 2px 4px -1px rgba(0, 0, 0, 0.01);
     }
 
     .feature-card:hover {
-      border-color: rgba(99, 102, 241, 0.3);
+      border-color: rgba(99, 102, 241, 0.2);
       transform: translateY(-2px);
+      box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.05);
     }
 
     .feature-title {
       font-size: 1.05rem;
       font-weight: 600;
-      color: #ffffff;
+      color: #0f172a;
       margin-bottom: 0.5rem;
       display: flex;
       align-items: center;
@@ -248,22 +242,30 @@
       color: var(--text-muted);
     }
 
-    /* Mermaid flow box */
-    .mermaid-box {
-      background: rgba(5, 5, 8, 0.6);
-      border: 1px solid rgba(255, 255, 255, 0.05);
-      border-radius: 12px;
+    /* GORGEOUS INLINE SVG FLOW BOX */
+    .svg-pipeline-container {
+      background: #ffffff;
+      border: 1px solid rgba(99, 102, 241, 0.08);
+      border-radius: 16px;
       padding: 2rem;
-      overflow-x: auto;
+      box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.02);
       margin-top: 1.5rem;
+      overflow-x: auto;
       display: flex;
       justify-content: center;
+      align-items: center;
     }
 
-    /* Code Snippets & Folders */
+    .svg-pipeline {
+      width: 100%;
+      max-width: 900px;
+      height: auto;
+    }
+
+    /* Code Snippets & Folders (Strictly styled for contrast) */
     .code-titlebar {
-      background: #111320;
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      background: #0f172a;
+      border: 1px solid rgba(0, 0, 0, 0.1);
       border-bottom: none;
       border-radius: 10px 10px 0 0;
       padding: 0.75rem 1rem;
@@ -288,13 +290,13 @@
     .code-dot.green { background: #27c93f; }
 
     .code-box {
-      background: rgba(5, 5, 8, 0.8);
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      background: #0f172a;
+      border: 1px solid rgba(0, 0, 0, 0.1);
       border-radius: 0 0 10px 10px;
       padding: 1.25rem;
       font-family: 'Fira Code', monospace;
       font-size: 0.85rem;
-      color: #d1d5db;
+      color: #e2e8f0;
       overflow-x: auto;
       line-height: 1.5;
     }
@@ -309,14 +311,14 @@
     th, td {
       padding: 1rem;
       text-align: left;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
     }
 
     th {
       font-family: 'Outfit', sans-serif;
       font-weight: 600;
-      color: #ffffff;
-      background: rgba(99, 102, 241, 0.05);
+      color: #0f172a;
+      background: rgba(99, 102, 241, 0.04);
     }
 
     td {
@@ -325,8 +327,8 @@
     }
 
     tr:hover td {
-      color: #ffffff;
-      background: rgba(255, 255, 255, 0.01);
+      color: #000000;
+      background: rgba(99, 102, 241, 0.01);
     }
 
     /* Version specific highlights */
@@ -349,7 +351,7 @@
     .timeline-item {
       position: relative;
       padding-left: 2rem;
-      border-left: 2px solid rgba(99, 102, 241, 0.15);
+      border-left: 2px solid rgba(99, 102, 241, 0.1);
     }
 
     .timeline-item::before {
@@ -361,19 +363,19 @@
       height: 10px;
       border-radius: 50%;
       background: var(--indigo);
-      box-shadow: 0 0 8px var(--indigo);
+      box-shadow: 0 0 6px rgba(99, 102, 241, 0.3);
     }
 
     .timeline-item.latest::before {
-      background: var(--cyan);
-      box-shadow: 0 0 10px var(--cyan);
+      background: var(--emerald);
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
     }
 
     .timeline-version {
       font-family: 'Outfit', sans-serif;
       font-size: 1.15rem;
       font-weight: 700;
-      color: #ffffff;
+      color: #0f172a;
       margin-bottom: 0.5rem;
       display: flex;
       align-items: center;
@@ -447,14 +449,14 @@
       
       <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
         <span class="badge-status status-emerald" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--emerald); padding: 0.35rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">Engine v2.1 (Active)</span>
-        <span class="badge-status status-stable" style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); color: var(--cyan); padding: 0.35rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">Gemini 2.5 Flash</span>
+        <span class="badge-status status-stable" style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); color: var(--indigo); padding: 0.35rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">Gemini 2.5 Flash</span>
       </div>
     </header>
 
     <!-- ✨ 주요 기능 -->
     <section id="features">
       <h2>
-        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">✨</span>
+        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.15);">✨</span>
         주요 기능 명세
       </h2>
       <p style="color: var(--text-muted); margin-bottom: 1rem;">본 파이프라인이 제공하는 고성능 자동화의 핵심 구성 기능들입니다.</p>
@@ -490,66 +492,118 @@
     <!-- 🏗️ 시스템 아키텍처 -->
     <section id="architecture">
       <h2>
-        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">🏗️</span>
-        시스템 아키텍처
+        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.15);">🏗️</span>
+        시스템 아키텍처 (데이터 파이프라인)
       </h2>
-      <p style="color: var(--text-muted); margin-bottom: 1.5rem;">전체 마스터 파이프라인의 유기적인 데이터 흐름을 시각화한 구조도입니다.</p>
+      <p style="color: var(--text-muted); margin-bottom: 1.5rem;">선명하고 확대해도 깨지지 않는 고해상도 인라인 SVG 아키텍처 맵입니다. 파이프라인의 실시간 데이터 순환 구조를 보여줍니다.</p>
       
-      <div class="mermaid-box">
-        <div class="mermaid">
-flowchart TD
-    USER["👤 사용자\n'AI 영상목록' 재생목록에 영상 추가"]
-    MASTER[("📺 YouTube AI 영상목록")]
-    USER -->|영상 추가| MASTER
+      <div class="svg-pipeline-container">
+        <svg class="svg-pipeline" viewBox="0 0 950 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Definitions for Gradients, Markers, and Filters -->
+          <defs>
+            <linearGradient id="grad-yt" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#ef4444" />
+              <stop offset="100%" stop-color="#b91c1c" />
+            </linearGradient>
+            <linearGradient id="grad-engine" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#6366f1" />
+              <stop offset="100%" stop-color="#4338ca" />
+            </linearGradient>
+            <linearGradient id="grad-notion" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#1f2937" />
+              <stop offset="100%" stop-color="#111827" />
+            </linearGradient>
+            <linearGradient id="grad-obsidian" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#7c3aed" />
+              <stop offset="100%" stop-color="#5b21b6" />
+            </linearGradient>
+            <linearGradient id="grad-tele" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#0ea5e9" />
+              <stop offset="100%" stop-color="#0369a1" />
+            </linearGradient>
+            
+            <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+              <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#4f46e5" flood-opacity="0.08" />
+            </filter>
+            
+            <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#4f46e5" />
+            </marker>
+            <marker id="arrow-gray" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#94a3b8" />
+            </marker>
+          </defs>
 
-    subgraph TRIGGER["⏰ 실행 트리거"]
-        SCHED["launchd 스케줄러\n6시간 간격 (YouTube 인제스트)"]
-        WEBUI["웹 UI 버튼\nlocalhost:3000"]
-        WIKI_SCHED["launchd 스케줄러\n매일 03:00 (Wiki 전체 재분석)"]
-    end
+          <!-- Group 1: Youtube Input Source -->
+          <g filter="url(#shadow)">
+            <rect x="20" y="30" width="220" height="100" rx="14" fill="url(#grad-yt)" />
+            <text x="40" y="70" fill="#ffffff" font-family="'Outfit', sans-serif" font-weight="700" font-size="16">📺 YouTube Source</text>
+            <text x="40" y="95" fill="#fecaca" font-family="'Inter', sans-serif" font-size="12">마스터 재생목록 수집</text>
+            <text x="40" y="112" fill="#fecaca" font-family="'Inter', sans-serif" font-size="11">Data API v3 | normalizeTitle</text>
+          </g>
 
-    SCHED --> ENTRY
-    WEBUI -->|SSE| ENTRY
-    MASTER -->|Data API v3| FETCH
+          <!-- Group 2: Engine (scheduler.js) -->
+          <g filter="url(#shadow)">
+            <rect x="340" y="30" width="270" height="150" rx="14" fill="url(#grad-engine)" />
+            <text x="360" y="70" fill="#ffffff" font-family="'Outfit', sans-serif" font-weight="700" font-size="16">⚙️ AI Ingest Engine (v2.1)</text>
+            <text x="360" y="98" fill="#e0e7ff" font-family="'Inter', sans-serif" font-weight="600" font-size="12">Gemini 2.5 Flash (4K Tokens)</text>
+            <text x="360" y="120" fill="#c7d2fe" font-family="'Inter', sans-serif" font-size="11">✓ validateSummary (자가 치유 검증)</text>
+            <text x="360" y="137" fill="#c7d2fe" font-family="'Inter', sans-serif" font-size="11">✓ fallbackPrompt (최대 2회 복구)</text>
+            <text x="360" y="154" fill="#c7d2fe" font-family="'Inter', sans-serif" font-size="11">✓ lib/classifier.js (RAG/자동화 분류)</text>
+          </g>
 
-    subgraph PIPELINE["🤖 마스터 인제스트 파이프라인 (scheduler.js)"]
-        ENTRY["processMasterIngest()"]
-        FETCH["영상 메타 조회\n+ Notion 캐시 로드 · 중복 체크"]
-        GEMINI["lib/classifier.js\nGemini 2.5 Flash\n요약 + 토픽 1~5개 분류"]
-        NSAVE["saveToNotionWithTopics()\n— 영상별 in-loop —"]
-        YSAVE["lib/youtube_oauth.js\nplaylistItems.insert\n— 영상별 in-loop —"]
-        ENTRY --> FETCH --> GEMINI --> NSAVE --> YSAVE
-    end
+          <!-- Connection: Youtube -> Engine -->
+          <path d="M 240 80 L 332 80" stroke="#4f46e5" stroke-width="2.5" marker-end="url(#arrow)" stroke-dasharray="4" />
 
-    NSAVE --> NOTION[("📋 Notion DB\n다중 주제 태그 + 4섹션 요약")]
-    YSAVE -->|"quota 여유"| YT_PL[("📺 YouTube 토픽 재생목록\n33개")]
-    YSAVE -->|"quota 초과"| PENDING[("⏳ pending_playlist_adds.json")]
-    PENDING -->|"다음 실행 시 자동 소진"| YT_PL
+          <!-- Group 3: Notion Database -->
+          <g filter="url(#shadow)">
+            <rect x="710" y="30" width="220" height="120" rx="14" fill="url(#grad-notion)" />
+            <text x="730" y="70" fill="#ffffff" font-family="'Outfit', sans-serif" font-weight="700" font-size="16">📋 Notion Database</text>
+            <text x="730" y="98" fill="#cbd5e1" font-family="'Inter', sans-serif" font-size="12">1,912개 무결성 데이터베이스</text>
+            <text x="730" y="118" fill="#94a3b8" font-family="'Inter', sans-serif" font-size="11">주제 자동 매핑 (Multi-Select)</text>
+            <text x="730" y="135" fill="#94a3b8" font-family="'Inter', sans-serif" font-size="11">Clean Queue / 중복 0%</text>
+          </g>
 
-    NOTION -->|"모든 영상 처리 완료 후 1회"| SYNC
-    WIKI_SCHED -->|"일일 230 API 제한 준수"| WIKI_INGEST
+          <!-- Connection: Engine -> Notion -->
+          <path d="M 610 80 L 702 80" stroke="#4f46e5" stroke-width="2.5" marker-end="url(#arrow)" />
 
-    subgraph OBS["📓 Obsidian Karpathy LLM Wiki"]
-        SYNC["sync_obsidian.py\n신규 영상 .md 생성 + tags 갱신"]
-        WIKI_INGEST["wiki_ingest.py\nGemini 2.5 Flash\n개념/엔티티 Wiki 페이지 합성"]
-        BUILD["build_obsidian_wiki.py\nMOC + 키워드 허브 27개 자동 생성"]
-        VAULT[("📁 Obsidian Vault\nAI LLM Wiki/")]
-        
-        SYNC --> WIKI_INGEST
-        WIKI_INGEST --> BUILD
-        BUILD --> VAULT
-    end
+          <!-- Group 4: Obsidian Wiki System -->
+          <g filter="url(#shadow)">
+            <rect x="340" y="270" width="270" height="150" rx="14" fill="url(#grad-obsidian)" />
+            <text x="360" y="310" fill="#ffffff" font-family="'Outfit', sans-serif" font-weight="700" font-size="16">📓 Obsidian LLM Wiki</text>
+            <text x="360" y="338" fill="#ede9fe" font-family="'Inter', sans-serif" font-weight="600" font-size="12">sync_obsidian.py (증분 마이그레이션)</text>
+            <text x="360" y="360" fill="#ddd6fe" font-family="'Inter', sans-serif" font-size="11">✓ wiki_ingest.py (개념/도구 합성)</text>
+            <text x="360" y="377" fill="#ddd6fe" font-family="'Inter', sans-serif" font-size="11">✓ build_obsidian_wiki.py (MOC 빌더)</text>
+            <text x="360" y="394" fill="#ddd6fe" font-family="'Inter', sans-serif" font-size="11">✓ Karpathy 지식 그래프 링킹</text>
+          </g>
 
-    VAULT --> TG["📱 Telegram 통합 알림\nNotion 결과 + Obsidian 결과"]
-    YT_PL --> TG
-        </div>
+          <!-- Connection: Notion -> Obsidian (Sync Link) -->
+          <path d="M 820 150 L 820 230 L 475 230 L 475 262" stroke="#7c3aed" stroke-width="2" marker-end="url(#arrow)" stroke-dasharray="3" />
+          <text x="560" y="220" fill="#7c3aed" font-family="'Inter', sans-serif" font-weight="600" font-size="11">자동 증분 트리거</text>
+
+          <!-- Group 5: Telegram Telegram Bot Notification -->
+          <g filter="url(#shadow)">
+            <rect x="20" y="320" width="220" height="100" rx="14" fill="url(#grad-tele)" />
+            <text x="40" y="360" fill="#ffffff" font-family="'Outfit', sans-serif" font-weight="700" font-size="16">📱 Telegram Alert</text>
+            <text x="40" y="388" fill="#e0f2fe" font-family="'Inter', sans-serif" font-size="12">실시간 상태 브리핑 알림</text>
+            <text x="40" y="405" fill="#bae6fd" font-family="'Inter', sans-serif" font-size="11">성공 요약 보고 / 장애 탐지</text>
+          </g>
+
+          <!-- Connection: Obsidian -> Telegram -->
+          <path d="M 340 370 L 250 370" stroke="#0ea5e9" stroke-width="2" marker-end="url(#arrow)" />
+
+          <!-- Connection Background Loop (Self-Healing Error Queue fallback) -->
+          <path d="M 475 180 L 475 200 L 260 200 L 260 290 L 130 290 L 130 138" stroke="#ef4444" stroke-width="1.5" marker-end="url(#arrow-gray)" stroke-dasharray="2" />
+          <text x="175" y="280" fill="#ef4444" font-family="'Inter', sans-serif" font-size="10">오류 큐 대기 (pending_queue)</text>
+
+        </svg>
       </div>
     </section>
 
     <!-- 📂 프로젝트 구조 -->
     <section id="structure">
       <h2>
-        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">📂</span>
+        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.15);">📂</span>
         프로젝트 폴더 구조
       </h2>
       <p style="color: var(--text-muted); margin-bottom: 1.5rem;">안정적인 파이프라인 구동을 위한 디렉토리 레이아웃 명세입니다.</p>
@@ -560,14 +614,14 @@ flowchart TD
           <div class="code-dot yellow"></div>
           <div class="code-dot green"></div>
         </div>
-        <div style="font-size: 0.8rem; color: var(--text-muted);">WORKSPACE DIRECTORY</div>
+        <div style="font-size: 0.8rem; color: #94a3b8;">WORKSPACE DIRECTORY</div>
       </div>
       <div class="code-box">
 Youtube_Notion_Grap/
 ├── server.js                          # 웹 서버 + Notion API 프록시 + Obsidian 트리거
 ├── scheduler.js                       # 자동 스케줄러 (6시간 간격, 마스터 인제스트 포함)
 ├── index.html                         # 웹 앱 UI (단일 HTML 파일)
-├── README.html                        # [NEW] 본 가독성 극대화 웹 규격 문서
+├── README.html                        # [NEW] 본 가독성 극대화 웹 규격 문서 (라이트 테마)
 ├── package.json                       # Node.js 설정 및 종속성 관리 (v2.1.0)
 ├── sync_obsidian.py                   # Obsidian 증분 동기화 및 Wiki 재구축
 ├── wiki_ingest.py                     # Karpathy LLM Wiki 개념/엔티티 병합 합성 엔진
@@ -585,7 +639,7 @@ Youtube_Notion_Grap/
     <!-- 🛠️ 기술 스택 -->
     <section id="tech-stack">
       <h2>
-        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">🛠</span>
+        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.15);">🛠</span>
         기술 스택 명세
       </h2>
       <table>
@@ -634,14 +688,14 @@ Youtube_Notion_Grap/
     <!-- 🔑 환경 변수 설정 -->
     <section id="env-vars">
       <h2>
-        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">🔑</span>
+        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.15);">🔑</span>
         환경 변수 구성 (.env)
       </h2>
       <p style="color: var(--text-muted); margin-bottom: 1.5rem;">프로젝트 루트 경로에 <code>.env</code> 파일을 생성하여 API 자격을 등록하십시오 (보안 주의).</p>
       
       <div class="code-titlebar">
         <div class="code-dots"><div class="code-dot red"></div><div class="code-dot yellow"></div><div class="code-dot green"></div></div>
-        <div style="font-size: 0.8rem; color: var(--text-muted);">.env TEMPLATE</div>
+        <div style="font-size: 0.8rem; color: #94a3b8;">.env TEMPLATE</div>
       </div>
       <div class="code-box">
 YOUTUBE_API_KEY=AIzaSy...               # YouTube Data API Key
@@ -658,12 +712,12 @@ TELEGRAM_CHAT_ID=-100xxxxxxxx           # 수신용 Telegram Chat ID
     <!-- 📦 설치 및 실행 -->
     <section id="installation">
       <h2>
-        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">📦</span>
+        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.15);">📦</span>
         설치 및 구동 명령어
       </h2>
       <div class="code-titlebar">
         <div class="code-dots"><div class="code-dot red"></div><div class="code-dot yellow"></div><div class="code-dot green"></div></div>
-        <div style="font-size: 0.8rem; color: var(--text-muted);">TERMINAL COMMANDS</div>
+        <div style="font-size: 0.8rem; color: #94a3b8;">TERMINAL COMMANDS</div>
       </div>
       <div class="code-box">
 # 1. 의존성 패키지 설치
@@ -682,7 +736,7 @@ bash install-wiki-ingest.sh
     <!-- 📊 Notion DB 구조 -->
     <section id="notion-db">
       <h2>
-        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">📊</span>
+        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.15);">📊</span>
         Notion DB 스키마 구조
       </h2>
       <table>
@@ -731,7 +785,7 @@ bash install-wiki-ingest.sh
     <!-- 🔄 버전 관리 (Version History) -->
     <section id="history">
       <h2>
-        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.1); border: 1px solid rgba(99, 102, 241, 0.2);">🔄</span>
+        <span class="logo-icon" style="font-size: 1.2rem; width: 28px; height: 28px; background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.15);">🔄</span>
         릴리즈 히스토리
       </h2>
       
@@ -741,7 +795,7 @@ bash install-wiki-ingest.sh
         <div class="timeline-item latest">
           <div class="timeline-version">
             <span>v2.1</span>
-            <span class="v-badge" style="background: linear-gradient(135deg, var(--cyan), var(--indigo));">Active / Latest</span>
+            <span class="v-badge" style="background: linear-gradient(135deg, var(--emerald), var(--indigo));">Active / Latest</span>
             <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: normal;">— 2026-05-18</span>
           </div>
           <div class="timeline-desc">
@@ -791,8 +845,8 @@ bash install-wiki-ingest.sh
     </section>
 
     <!-- FOOTER -->
-    <footer style="margin-top: 5rem; padding-top: 2rem; border-top: 1px solid rgba(255, 255, 255, 0.05); text-align: center; color: var(--text-muted); font-size: 0.9rem;">
-      <p>© 2026 <span>iRichGreen AI Team</span>. Co-created with Claude & Gemini. Beautifully rendered in premium Glassmorphism UI.</p>
+    <footer style="margin-top: 5rem; padding-top: 2rem; border-top: 1px solid rgba(0, 0, 0, 0.05); text-align: center; color: var(--text-muted); font-size: 0.9rem;">
+      <p>© 2026 <span>iRichGreen AI Team</span>. Co-created with Claude & Gemini. Beautifully rendered in premium Light Glassmorphism UI.</p>
     </footer>
 
   </main>
