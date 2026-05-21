@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Wiki 엔티티/개념 정의 + Gemini API 유틸리티"""
 
-import os, json, ssl, time, unicodedata
+import os, json, ssl, time, unicodedata, sys, urllib.error
 from urllib.request import urlopen, Request
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -109,8 +109,29 @@ def gemini_call(prompt, temperature=0.2, max_tokens=4000):
         headers={'Content-Type': 'application/json'},
     )
     _last_call_time = time.time()
-    with urlopen(req, context=ctx, timeout=60) as res:
-        result = json.loads(res.read())
+    try:
+        with urlopen(req, context=ctx, timeout=60) as res:
+            result = json.loads(res.read())
+    except urllib.error.HTTPError as e:
+        status_code = e.code
+        try:
+            error_body = e.read().decode('utf-8')
+        except Exception:
+            error_body = str(e)
+        print(f"\n🚨 [Gemini API 에러] HTTP {status_code} 발생!")
+        print(f"상세 내용: {error_body}")
+        if status_code == 403:
+            if 'suspended' in error_body.lower() or 'consumer_suspended' in error_body.lower():
+                print("⚠️  경고: 구글에 의해 해당 API Key 또는 프로젝트가 정지(Suspended)되었습니다.")
+                print("계정 보호 및 추가 연쇄 정지 방지를 위해 작업을 즉시 중단하고 프로세스를 종료합니다.")
+                sys.exit(1)
+            else:
+                print("⚠️  권한 부족 오류입니다. 추가 에러 방지를 위해 작업을 중단합니다.")
+                sys.exit(1)
+        elif status_code in (400, 401):
+            print("잘못된 요청이거나 잘못된 API 키 설정입니다. 프로세스를 종료합니다.")
+            sys.exit(1)
+        raise e
 
     # 호출 수 기록
     quota['count'] += 1

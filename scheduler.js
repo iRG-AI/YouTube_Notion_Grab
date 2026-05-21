@@ -427,12 +427,37 @@ async function geminiSummarize(v) {
           continue;
         }
       }
+
+      if (res.status === 403) {
+        const errorMsg = typeof res.data === 'object' ? JSON.stringify(res.data) : String(res.data);
+        log(`\n🚨🚨🚨 [치명적 권한 에러] Gemini API 403 Forbidden 감지! (Key: ${maskedKey})`);
+        log(`상세 내용: ${errorMsg}`);
+        
+        if (errorMsg.includes('suspended') || errorMsg.includes('CONSUMER_SUSPENDED')) {
+          log(`⚠️  경고: 구글에 의해 해당 API Key 또는 프로젝트가 정지(Suspended)되었습니다.`);
+          log(`계정 보호 및 추가 연쇄 정지 방지를 위해 즉시 작업을 전면 중단하고 프로세스를 종료합니다.`);
+          await sendTelegram(`🚨 <b>[치명적 보안 경고]</b>\nGemini API 키 정지(Suspended) 감지!\n추가 차단 방지를 위해 요약 작업을 긴급 중단하고 프로세스를 강제 종료했습니다.\n계정 및 API 상태를 즉시 확인하세요.`);
+          process.exit(1);
+        } else {
+          log(`⚠️  권한 부족 오류입니다. 추가 에러 방지를 위해 작업을 중단합니다.`);
+          await sendTelegram(`🚨 <b>[작업 중단 알림]</b>\nGemini API 403 Forbidden 권한 에러 감지.\n작업을 긴급 중단했습니다.`);
+          process.exit(1);
+        }
+      }
+
+      if (res.status === 400 || res.status === 401) {
+        log(`🚨 [치명적 설정 에러] Gemini API ${res.status} 감지! (Key: ${maskedKey})`);
+        log(`잘못된 요청이거나 잘못된 API 키 설정입니다. 추가적인 무의미한 API 호출 방지를 위해 프로세스를 종료합니다.`);
+        await sendTelegram(`🚨 <b>[설정 오류 알림]</b>\nGemini API ${res.status} 오류 감지.\n프로세스를 중단했습니다.`);
+        process.exit(1);
+      }
       
       if (res.status !== 200) {
         attempt++;
-        log(`    ⚠️  Gemini API 에러 ${res.status} (Key: ${maskedKey}). 3초 대기 후 다음 키로 교체 시도...`);
+        const waitTime = Math.min(20000, 3000 * Math.pow(2, attempt)); // 지수 백오프 적용
+        log(`    ⚠️  Gemini API 에러 ${res.status} (Key: ${maskedKey}). ${waitTime / 1000}초 대기 후 다음 키로 교체 시도... (시도: ${attempt}/${maxAttempts})`);
         rotateGeminiKey();
-        await new Promise(r => setTimeout(r, 3000));
+        await new Promise(r => setTimeout(r, waitTime));
         continue;
       }
       break;

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Google AI Pro 한도 변경 및 Antigravity 진화 분석 리포트</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      theme: 'base',
+      themeVariables: {
+        primaryColor: '#e0e7ff',
+        primaryTextColor: '#1e293b',
+        primaryBorderColor: '#6366f1',
+        lineColor: '#6366f1',
+        secondaryColor: '#f1f5f9',
+        tertiaryColor: '#fff'
+      },
+      startOnLoad: true,
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: true, htmlLabels: true, curve: 'basis' }
+    });
+  </script>
+
+  <style>
+    :root {
+      --bg-light: #f8fafc;
+      --bg-card: rgba(255, 255, 255, 0.85);
+      --border-indigo: rgba(99, 102, 241, 0.15);
+      --indigo: #4f46e5;
+      --violet: #7c3aed;
+      --cyan: #0891b2;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --glass-blur: blur(20px);
+    }
+
+    body {
+      background-color: var(--bg-light);
+      background-image: 
+        radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.04) 0%, transparent 50%),
+        radial-gradient(circle at 100% 100%, rgba(124, 58, 237, 0.04) 0%, transparent 50%);
+      background-attachment: fixed;
+      font-family: 'Inter', sans-serif;
+      color: var(--text-main);
+      line-height: 1.6;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 900px;
+      padding: 4rem 2rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 4rem;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: rgba(99, 102, 241, 0.08);
+      border: 1px solid rgba(99, 102, 241, 0.2);
+      padding: 0.4rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--indigo);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 1.5rem;
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #0f172a 30%, var(--indigo) 90%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 1rem;
+    }
+
+    header p {
+      font-size: 1.1rem;
+      color: var(--text-muted);
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    section {
+      background: var(--bg-card);
+      border: 1px solid var(--border-indigo);
+      border-radius: 24px;
+      padding: 3rem;
+      margin-bottom: 3rem;
+      backdrop-filter: var(--glass-blur);
+      box-shadow: 0 10px 40px -10px rgba(99, 102, 241, 0.08), 0 1px 3px rgba(0, 0, 0, 0.02);
+    }
+
+    h2 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+    }
+
+    /* Mermaid Container */
+    .mermaid-wrapper {
+      background: #ffffff;
+      border: 1px solid rgba(99, 102, 241, 0.1);
+      border-radius: 16px;
+      padding: 2rem;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.02);
+      margin-top: 2rem;
+      margin-bottom: 2rem;
+      overflow-x: auto;
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Table Styles */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 2rem 0;
+      background: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(99, 102, 241, 0.1);
+    }
+
+    th, td {
+      padding: 1.2rem;
+      text-align: left;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    th {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 600;
+      color: #0f172a;
+      background: rgba(99, 102, 241, 0.03);
+    }
+
+    td {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      vertical-align: top;
+    }
+
+    td strong {
+      color: var(--indigo);
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+
+    /* Pros & Cons Cards */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    .info-card {
+      padding: 1.5rem;
+      border-radius: 16px;
+      border: 1px solid;
+    }
+
+    .info-card.pros {
+      background: rgba(16, 185, 129, 0.03);
+      border-color: rgba(16, 185, 129, 0.2);
+    }
+    .info-card.pros h3 { color: #059669; margin-bottom: 1rem; }
+
+    .info-card.cons {
+      background: rgba(225, 29, 72, 0.03);
+      border-color: rgba(225, 29, 72, 0.2);
+    }
+    .info-card.cons h3 { color: #e11d48; margin-bottom: 1rem; }
+
+    .info-card ul {
+      list-style-type: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .info-card ul li {
+      font-size: 0.95rem;
+      position: relative;
+      padding-left: 1.5rem;
+    }
+    
+    .info-card.pros ul li::before {
+      content: '✓';
+      position: absolute;
+      left: 0;
+      color: #059669;
+      font-weight: bold;
+    }
+
+    .info-card.cons ul li::before {
+      content: '!';
+      position: absolute;
+      left: 0;
+      color: #e11d48;
+      font-weight: bold;
+    }
+
+    .alert-box {
+      background: linear-gradient(to right, rgba(99, 102, 241, 0.1), rgba(124, 58, 237, 0.05));
+      border-left: 4px solid var(--indigo);
+      padding: 1.5rem;
+      border-radius: 0 12px 12px 0;
+      margin: 2rem 0;
+    }
+
+    .alert-box strong {
+      display: block;
+      color: #0f172a;
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+    }
+
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <div class="badge">Google AI Pro Policy Analysis</div>
+      <h1>Antigravity 진화 및 과금 모델 리포트</h1>
+      <p>단순 코딩 비서에서 '자율형(Agentic) 수석 엔지니어'로 거듭난 Antigravity의 아키텍처 변화와, 이에 따른 새로운 구글 컴퓨팅 연산 기반 한도(Quota) 시스템을 해부합니다.</p>
+    </header>
+
+    <section>
+      <h2>🏗️ 아키텍처 및 자원 소모 모델 비교</h2>
+      <p>과거의 수동적인 IDE 플러그인과 현재의 완전 자율형(Standalone) 앱이 왜 자원(토큰)을 다르게 소모할 수밖에 없는지 보여주는 다이어그램입니다.</p>
+      
+      <div class="mermaid-wrapper">
+        <div class="mermaid">
+flowchart TD
+    subgraph OLD["과거 (Antigravity 1.0 IDE Plugin)"]
+        direction TB
+        O_USER["👤 사용자"] -->|"단발성 질문 (수동)"| O_IDE["💻 IDE 확장 프로그램\n(수동적 비서)"]
+        O_IDE -->|"1회 API 요청"| O_AI["🧠 AI 모델"]
+        O_AI -->|"단일 답변 리턴"| O_USER
+    end
+
+    subgraph NEW["현재 (Antigravity 2.0+ Standalone App)"]
+        direction TB
+        N_USER["👤 사용자"] -->|"/goal, 복잡한 설계 명령"| N_APP["🚀 Antigravity 단독 앱\n(자율형 수석 엔지니어)"]
+        
+        N_APP -->|"명령 하달"| SUB1["서브 에이전트 A\n(리서치)"]
+        N_APP -->|"명령 하달"| SUB2["서브 에이전트 B\n(코딩)"]
+        N_APP -->|"명령 하달"| SUB3["서브 에이전트 C\n(터미널 제어)"]
+        
+        SUB1 <-->|"무수한 루프\n(컴퓨팅 대량 소모)"| N_AI["🧠 AI 모델"]
+        SUB2 <--> N_AI
+        SUB3 <--> N_AI
+        
+        N_AI -->|"최종 완성본 통합"| N_APP
+        N_APP -->|"아티팩트 및 보고"| N_USER
+    end
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>⚖️ 상세 비교 분석표</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>비교 항목</th>
+            <th>과거 (IDE 확장 프로그램)</th>
+            <th>현재 (Antigravity 2.0 독립 앱)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>작업 방식</strong></td>
+            <td>수동적 (Passive). 사용자가 코드를 긁어서 물어보면 대답만 해줌.</td>
+            <td>자율적 (Agentic). 스스로 터미널을 제어하고 목표를 끝까지 달성함.</td>
+          </tr>
+          <tr>
+            <td><strong>자원 소모량</strong></td>
+            <td>매우 낮음 (1문 1답)</td>
+            <td>매우 높음 (에러 수정, 파일 스캔 등 무수한 백그라운드 호출)</td>
+          </tr>
+          <tr>
+            <td><strong>요금(한도) 정책</strong></td>
+            <td>고정형 (예: 월 1,000 크레딧 제공)</td>
+            <td>컴퓨팅 연산 기반 한도형 (5시간마다 한도 리셋)</td>
+          </tr>
+          <tr>
+            <td><strong>결과물 렌더링</strong></td>
+            <td>답답하고 좁은 창의 단순 텍스트 출력</td>
+            <td>아티팩트(Artifact), 웹 프리뷰, SVG 다이어그램 등 실시간 화려한 렌더링</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>🚨 변경된 요금제로 인한 제약과 장단점</h2>
+      <p>구글 AI Pro 구독자는 일반 유저 대비 4배 높은 한도가 <strong>5시간마다 갱신</strong>되어 주어집니다. 더 이상 월 1,000 크레딧에 연연할 필요가 없습니다.</p>
+      
+      <div class="grid-2" style="margin-top: 1.5rem;">
+        <div class="info-card pros">
+          <h3>✅ 장점 (더 좋아진 점)</h3>
+          <ul>
+            <li><strong>압도적인 성능 해방:</strong> 5시간마다 갱신되므로 하루에 여러 번 무거운 백그라운드 작업을 마음껏 돌릴 수 있습니다.</li>
+            <li><strong>최신 추론 모델 지원:</strong> Gemini 3.1 Pro와 같은 고사양 사고 모델을 내장 앱에서 완벽히 지원합니다.</li>
+            <li><strong>자동화의 극대화:</strong> 수십 개의 서브 에이전트를 가동해도 5시간 한도 내에서 동적으로 배분됩니다.</li>
+          </ul>
+        </div>
+        
+        <div class="info-card cons">
+          <h3>⚠️ 주의점 (단점)</h3>
+          <ul>
+            <li><strong>순간 한도 도달:</strong> <code>/goal</code> 명령어로 밤새 코드를 리팩토링하는 극한의 작업을 시키면, 5시간 한도에 도달해 잠시 브레이크가 걸릴 수 있습니다.</li>
+            <li><strong>크레딧 소멸의 심리적 압박:</strong> 명시적인 횟수가 사라져서 체감 관리가 낯설 수 있습니다.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="alert-box">
+        <strong>💡 총평 및 개발 대응 가이드</strong>
+        개발에 제약이 생기는 것이 아니라, 무기가 너무 강력해져서 탄창의 규칙이 바뀐 것입니다. 가벼운 일상 코딩이나 리팩토링은 기존보다 훨씬 쾌적하게 펑펑 쓰셔도 무방하며, 대규모 아키텍처 재설계 같은 무거운 작업은 자기 전(또는 휴식 시간)에 지시하여 5시간 갱신 주기를 알차게 활용하시는 것을 권장합니다.
+      </div>
+    </section>
+
+  </div>
+
+</body>
+</html>
