@@ -448,7 +448,7 @@
       <p>본 프로젝트는 YouTube 재생목록의 영상을 <strong>Gemini AI</strong>로 자동 수집/요약하여 <strong>Notion DB</strong>에 저장하고, 이를 <strong>Obsidian</strong>으로 자동 동기화하여 최신 <strong>LLM Wiki</strong> 지식베이스를 유기적으로 구축하는 엔터프라이즈급 자동화 솔루션입니다.</p>
       
       <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-        <span class="badge-status status-emerald" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--emerald); padding: 0.35rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">Engine v2.1 (Active)</span>
+        <span class="badge-status status-emerald" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--emerald); padding: 0.35rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">Engine v2.2 (Active)</span>
         <span class="badge-status status-stable" style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); color: var(--indigo); padding: 0.35rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">Gemini 2.5 Flash</span>
       </div>
     </header>
@@ -791,11 +791,28 @@ bash install-wiki-ingest.sh
       
       <div class="timeline">
         
-        <!-- v2.1 -->
+        <!-- v2.2 -->
         <div class="timeline-item latest">
           <div class="timeline-version">
-            <span>v2.1</span>
+            <span>v2.2</span>
             <span class="v-badge" style="background: linear-gradient(135deg, var(--emerald), var(--indigo));">Active / Latest</span>
+            <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: normal;">— 2026-05-21</span>
+          </div>
+          <div class="timeline-desc">
+            <strong>API 보안 킬스위치 및 안전장치 강화</strong>
+            <ul>
+              <li><strong>API 403 Suspended 에러 킬스위치(Kill-switch) 구현</strong>: Gemini API 키가 차단(suspended)되었을 때 무한 루프를 돌며 API 호출을 시도하지 않고, 즉시 텔레그램으로 경보를 보낸 뒤 <code>process.exit(1)</code> 및 <code>sys.exit(1)</code>로 안전하게 프로세스를 강제 종료하는 안전장치 추가.</li>
+              <li><strong>백업용 지수 백오프(Exponential Backoff)</strong>: 일시적인 오류(429, 5xx)에 대해 단순 고정 3초 대기 대신 점진적으로 대기 간격을 늘리는 지수 백오프 알고리즘 적용 (<code>scheduler.js</code>, <code>wiki_config.py</code>).</li>
+              <li><strong>백그라운드 자동 스케줄러 완전 정지 및 plist 삭제</strong>: 백그라운드 오작동으로 인한 구글 계정의 비정상 활동 감지 리스크를 차단하기 위해 launchd 스케줄러(<code>ytsummarizer</code>, <code>wiki-ingest</code>)를 완전 언로드 및 설정 파일(plist) 2종을 영구 삭제 처리.</li>
+              <li><strong>보안 및 안전 최우선 지침 지정</strong>: <code>SKILL_SAFETY.md</code>를 생성하여 AI 에이전트의 API 남용과 비정상 호출을 차단하는 가이드를 스킬로 지정하고, <code>CLAUDE.md</code>에도 이 보안 최우선 개발 원칙을 명문화함.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- v2.1 -->
+        <div class="timeline-item">
+          <div class="timeline-version">
+            <span>v2.1</span>
             <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: normal;">— 2026-05-18</span>
           </div>
           <div class="timeline-desc">
