@@ -448,7 +448,7 @@
       <p>본 프로젝트는 YouTube 재생목록의 영상을 <strong>Gemini AI</strong>로 자동 수집/요약하여 <strong>Notion DB</strong>에 저장하고, 이를 <strong>Obsidian</strong>으로 자동 동기화하여 최신 <strong>LLM Wiki</strong> 지식베이스를 유기적으로 구축하는 엔터프라이즈급 자동화 솔루션입니다.</p>
       
       <div style="display: flex; gap: 1rem; margin-top: 1.5rem;">
-        <span class="badge-status status-emerald" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--emerald); padding: 0.35rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">Engine v2.2 (Active)</span>
+        <span class="badge-status status-emerald" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: var(--emerald); padding: 0.35rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">Engine v2.3 (Active)</span>
         <span class="badge-status status-stable" style="background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); color: var(--indigo); padding: 0.35rem 1rem; border-radius: 6px; font-size: 0.85rem; font-weight: 600;">Gemini 2.5 Flash</span>
       </div>
     </header>
@@ -791,11 +791,26 @@ bash install-wiki-ingest.sh
       
       <div class="timeline">
         
-        <!-- v2.2 -->
+        <!-- v2.3 -->
         <div class="timeline-item latest">
           <div class="timeline-version">
-            <span>v2.2</span>
+            <span>v2.3</span>
             <span class="v-badge" style="background: linear-gradient(135deg, var(--emerald), var(--indigo));">Active / Latest</span>
+            <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: normal;">— 2026-06-02</span>
+          </div>
+          <div class="timeline-desc">
+            <strong>비용 최적화 및 무료 Key 로테이션 적용</strong>
+            <ul>
+              <li><strong>Gemini 2.5 Flash 비용 최적화 옵션 추가 적용</strong>: <code>scheduler.js</code>에서 Gemini 2.5 Flash를 통한 요약 수행 시 누락되었던 <code>thinkingConfig: { thinkingBudget: 0 }</code>를 추가하여, 보이지 않는 백그라운드 추론 토큰 과금(Thinking Quota)으로 인해 비용이 과다 청구되던 현상을 원천 방지(비용 약 85% 이상 절감).</li>
+              <li><strong>무료 API Key 로테이션 적용</strong>: 결제 카드가 연결되지 않은 4개의 순수 무료 API 키(<code>anvaksa@gmail.com</code>, <code>irichgreen.ai@gmail.com</code> 등)를 생성하여 <code>.env</code> 내 <code>GEMINI_API_KEYS</code>에 멀티 등록. 429 에러(무료 한도 초과) 발생 시 자동으로 다음 키로 교환 작동하도록 스케줄러 동작을 보완하여 <strong>비용 0원 무과금 가동 환경</strong>을 구축함.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- v2.2 -->
+        <div class="timeline-item">
+          <div class="timeline-version">
+            <span>v2.2</span>
             <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: normal;">— 2026-05-21</span>
           </div>
           <div class="timeline-desc">

@@ -409,7 +409,8 @@ async function geminiSummarize(v) {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { 
           temperature: 0.3, 
-          maxOutputTokens: 4000 // 한글 출력 짤림 방지를 위해 2000 ➔ 4000 상향
+          maxOutputTokens: 4000, // 한글 출력 짤림 방지를 위해 2000 ➔ 4000 상향
+          thinkingConfig: { thinkingBudget: 0 }
         },
       });
 
