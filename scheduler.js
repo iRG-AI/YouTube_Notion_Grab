@@ -915,11 +915,32 @@ async function processMasterIngest(notionCache) {
         const summary = sRes.value;
 
         // 분류 (현재 활성화된 로테이션된 API Key 주입)
-        const cls = await classifier.classifyTopics(
-          { summary, title: v.title, channel: v.channelTitle },
-          availableTopics,
-          { geminiApiKey: getActiveGeminiKey() }
-        );
+        let cls;
+        const keysCount = CONFIG.geminiApiKeys.length;
+        const maxClsAttempts = Math.max(3, keysCount * 2);
+        let clsAttempt = 0;
+
+        while (clsAttempt < maxClsAttempts) {
+          try {
+            cls = await classifier.classifyTopics(
+              { summary, title: v.title, channel: v.channelTitle },
+              availableTopics,
+              { geminiApiKey: getActiveGeminiKey(), maxRetries: 0 }
+            );
+            break;
+          } catch (clsErr) {
+            clsAttempt++;
+            if ((clsErr.message.includes('429') || clsErr.message.includes('Quota') || clsErr.message.includes('quota')) && keysCount > 1) {
+              const currentKey = getActiveGeminiKey();
+              const maskedKey = currentKey ? `${currentKey.slice(0, 8)}...${currentKey.slice(-6)}` : '없음';
+              log(`    ⏳ [분류 Rate Limit] 에러 발생 (Key: ${maskedKey}). API Key 교체 후 재시도... (시도: ${clsAttempt}/${maxClsAttempts})`);
+              rotateGeminiKey();
+              await new Promise(r => setTimeout(r, 1000));
+              continue;
+            }
+            throw clsErr;
+          }
+        }
         const topics = cls.topics;  // 분류된 토픽들
         const allTopics = [...topics];  // 분류 토픽만 (AI 영상목록은 재생목록이지 주제 태그 아님)
 
