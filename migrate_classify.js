@@ -141,6 +141,8 @@ async function getSummaryText(pageId) {
 function appendPending(entry) {
   let q = [];
   try { q = JSON.parse(fs.readFileSync(PENDING_QUEUE_PATH, 'utf-8')); } catch {}
+  // 이미 대기 중인 (videoId, playlistId) 조합이면 적재하지 않음
+  if (q.some(x => x.videoId === entry.videoId && x.playlistId === entry.playlistId)) return;
   q.push({ ...entry, ts: new Date().toISOString() });
   fs.writeFileSync(PENDING_QUEUE_PATH, JSON.stringify(q, null, 2));
 }

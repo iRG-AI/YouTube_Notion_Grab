@@ -791,11 +791,44 @@ bash install-wiki-ingest.sh
       
       <div class="timeline">
         
-        <!-- v2.3 -->
+        <!-- v2.5 -->
         <div class="timeline-item latest">
           <div class="timeline-version">
-            <span>v2.3</span>
+            <span>v2.5</span>
             <span class="v-badge" style="background: linear-gradient(135deg, var(--emerald), var(--indigo));">Active / Latest</span>
+            <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: normal;">— 2026-08-17</span>
+          </div>
+          <div class="timeline-desc">
+            <strong>재생목록 대기큐 정합성 및 API 어뷰징 차단</strong>
+            <ul>
+              <li><strong>중복 적재 원천 차단</strong>: <code>scheduler.js</code>·<code>migrate_classify.js</code>의 <code>appendPending()</code>이 무조건 push하던 탓에 동일 <code>(videoId, playlistId)</code> 조합이 최대 28회까지 중복 적재되어 대기큐의 46.7%가 중복으로 채워지던 문제를 교정. 적재 전 동일 조합 존재 여부를 검사하여 재적재를 차단함.</li>
+              <li><strong>영구 실패 dead-letter 격리</strong>: <code>flushPendingQueue()</code>의 "기타 오류" 분기가 <code>403 playlistItemsNotAccessible</code> 같은 영구 실패까지 큐에 되돌려 영원히 재시도하던 구조를 개선. 영구 실패 사유는 <code>pending_playlist_adds.dead.json</code>으로 격리하고, 일시적 오류도 <code>retryCount</code> 5회를 넘기면 함께 격리하여 어떤 실패도 무한 순환하지 않도록 보장함.</li>
+              <li><strong>연속 실패 차단기(Circuit Breaker)</strong>: 계정·권한 문제로 실패가 연쇄될 때 수백 건의 403 요청을 난사하던 동작을 차단. 연속 10회 실패 시 큐 처리를 즉시 중단하고 잔여 항목을 보존함 (CLAUDE.md 보안 원칙 1 — 연쇄 요청 금지 준수).</li>
+              <li><strong>실패 요청 quota 계상 교정</strong>: <code>lib/youtube_oauth.js</code>가 성공 응답에서만 <code>consumeQuota(50)</code>를 호출해, 실패한 <code>playlistItems.insert</code>가 소비한 실제 quota가 <code>.quota_state.json</code>에 반영되지 않던 문제를 교정.</li>
+              <li><strong>큐 적체 알림 추가</strong>: 텔레그램 완료 요약에 대기큐 잔량·소진 예상일을 상시 표기하고, 1,000건 이상 적체 시와 <code>.quota_state.json</code>이 당일 갱신되지 않은 경우 경고를 함께 발송함.</li>
+              <li><strong>재실행 가능한 큐 정리 스크립트</strong>: <code>scripts/clean_pending_queue.js</code> 신규 추가. 중복 제거(최초 ts 보존)와 미등록 재생목록·영구 실패 항목의 dead-letter 격리를 수행하며, 기본 <code>--dry-run</code>·<code>--apply</code> 시 타임스탬프 백업 생성.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- v2.4 -->
+        <div class="timeline-item">
+          <div class="timeline-version">
+            <span>v2.4</span>
+            <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: normal;">— 2026-07-08</span>
+          </div>
+          <div class="timeline-desc">
+            <strong>주제 분류 API 키 로테이션 적용 및 안정성 강화</strong>
+            <ul>
+              <li>주제 분류 단계(<code>classifyTopics</code>)에서 429 에러(할당량 초과) 발생 시 다음 API Key로 자동 전환(<code>rotateGeminiKey()</code>) 후 재시도하도록 개선하여, 특정 API Key의 한도 초과 상황에서도 스케줄러의 무중단 인제스트 무결성을 확보함.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- v2.3 -->
+        <div class="timeline-item">
+          <div class="timeline-version">
+            <span>v2.3</span>
             <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: normal;">— 2026-06-02</span>
           </div>
           <div class="timeline-desc">

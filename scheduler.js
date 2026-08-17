@@ -775,7 +775,9 @@ async function flushPendingQueue() {
 
   log(`⏳ pending 큐 처리 시작 — ${queue.length}건`);
   const remaining = [];
+  const deadLetters = [];
   let done = 0;
+  let consecutiveFail = 0;   // 연속 실패 차단기 (CLAUDE.md 보안 원칙 1 — 403 연쇄 요청 금지)
 
   for (let i = 0; i < queue.length; i++) {
     const item = queue[i];
@@ -787,6 +789,7 @@ async function flushPendingQueue() {
     try {
       await yt.addToPlaylist(item.playlistId, item.videoId);
       done++;
+      consecutiveFail = 0;
     } catch (e) {
       if (e.code === 'QUOTA_EXHAUSTED') {
         log(`  ⏸  quota 소진 — ${queue.length - i}건 연기`);
@@ -799,10 +802,39 @@ async function flushPendingQueue() {
         remaining.push(...queue.slice(i));
         break;
       }
-      // 기타 오류: 건너뛰지 않고 큐에 유지 (다음 실행에서 재시도)
-      log(`  ⚠️  실패 [${item.videoId}] ${item.topic || ''}: ${e.message.slice(0, 80)}`);
-      remaining.push(item);
+      // 연속 실패가 이어지면 계정/권한 문제다. 403을 수백 번 난사하면
+      // 실제 quota만 태우고 구글 어뷰징 탐지 대상이 되므로 즉시 중단한다.
+      if (++consecutiveFail >= 10) {
+        log(`  🛑 연속 실패 ${consecutiveFail}회 — 큐 처리 중단 (OAuth 계정/재생목록 권한 확인 필요): ${e.message.slice(0, 80)}`);
+        remaining.push(...queue.slice(i));
+        break;
+      }
+      // 영구 실패는 재시도해도 성공하지 않는다 → dead-letter로 격리
+      const PERMANENT = ['playlistItemsNotAccessible', 'playlistNotFound', 'videoNotFound', 'forbidden'];
+      const isPermanent = PERMANENT.some(k => (e.message || '').includes(k));
+
+      if (isPermanent) {
+        deadLetters.push({ ...item, deadReason: e.message.slice(0, 200), deadAt: new Date().toISOString() });
+        log(`  ⛔ 영구 실패 격리 [${item.videoId}] ${item.topic || ''}: ${e.message.slice(0, 60)}`);
+      } else {
+        item.retryCount = (item.retryCount || 0) + 1;
+        if (item.retryCount >= 5) {
+          deadLetters.push({ ...item, deadReason: `재시도 5회 초과: ${e.message.slice(0, 150)}`, deadAt: new Date().toISOString() });
+          log(`  ⛔ 재시도 한도 초과 격리 [${item.videoId}]`);
+        } else {
+          log(`  ⚠️  실패(${item.retryCount}/5) [${item.videoId}]: ${e.message.slice(0, 60)}`);
+          remaining.push(item);
+        }
+      }
     }
+  }
+
+  if (deadLetters.length) {
+    const DEAD_PATH = path.join(__dirname, 'pending_playlist_adds.dead.json');
+    let dead = [];
+    try { dead = JSON.parse(fs.readFileSync(DEAD_PATH, 'utf-8')); } catch {}
+    fs.writeFileSync(DEAD_PATH, JSON.stringify([...dead, ...deadLetters], null, 2));
+    log(`  ⛔ dead-letter ${deadLetters.length}건 격리 (누적 ${dead.length + deadLetters.length}건)`);
   }
 
   fs.writeFileSync(PENDING_PATH, JSON.stringify(remaining, null, 2));
@@ -984,6 +1016,8 @@ async function processMasterIngest(notionCache) {
           const appendPending = (entry) => {
             let q = [];
             try { q = JSON.parse(fs.readFileSync(PENDING_PATH, 'utf-8')); } catch {}
+            // 이미 대기 중인 (videoId, playlistId) 조합이면 적재하지 않음
+            if (q.some(x => x.videoId === entry.videoId && x.playlistId === entry.playlistId)) return;
             q.push({ ...entry, ts: new Date().toISOString() });
             fs.writeFileSync(PENDING_PATH, JSON.stringify(q, null, 2));
           };
@@ -1313,6 +1347,21 @@ async function main() {
     ? `📊 합계: 신규 저장 ${fmtNum(totalSaved)}개 | 스킵 ${fmtNum(totalSkip)}개 | 오류 ${fmtNum(totalError)}개`
     : `📊 합계: 저장 ${fmtNum(totalSaved)}/ 스킵 ${fmtNum(totalSkip)}/ 오류 ${fmtNum(totalError)}`;
 
+  // ── pending 큐 적체 경고 (3개월간 아무도 모르고 5,392건까지 쌓인 사고 재발 방지) ──
+  const queueLines = [];
+  const pendingCount = (() => {
+    try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'pending_playlist_adds.json'), 'utf-8')).length; } catch { return 0; }
+  })();
+  if (pendingCount > 0) {
+    queueLines.push(`⏳ 재생목록 대기: ${fmtNum(pendingCount)}건 (소진 예상 ${(pendingCount / 190).toFixed(1)}일)`);
+    if (pendingCount >= 1000) queueLines.push(`⚠️ 큐 적체 — 원인 확인 필요`);
+    try {
+      const qs = JSON.parse(fs.readFileSync(path.join(__dirname, '.quota_state.json'), 'utf-8'));
+      const today = new Date().toISOString().slice(0, 10);
+      if (qs.date !== today) queueLines.push(`🛑 오늘 YouTube 쓰기 0건 — quota_state 마지막 갱신 ${qs.date}`);
+    } catch {}
+  }
+
   const msg = [
     `🎬 YouTube → Notion 요약 완료`,
     `📅 ${now}`,
@@ -1321,6 +1370,7 @@ async function main() {
     summaryLines,
     ``,
     totalLine,
+    ...queueLines,
   ].join('\n');
 
   await sendEmail(`[YouTube 요약] 완료 - 저장 ${totalSaved}개`, msg);
