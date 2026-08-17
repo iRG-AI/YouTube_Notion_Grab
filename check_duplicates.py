@@ -4,7 +4,7 @@ from urllib.request import urlopen, Request
 from collections import defaultdict
 
 env = {}
-for line in open('/Users/tycoonan/Documents/Claude/Youtube_Notion_Grap/.env').read().split('\n'):
+for line in open('/Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap/.env').read().split('\n'):
     line = line.strip()
     if not line or line.startswith('#') or '=' not in line: continue
     k, _, v = line.partition('=')

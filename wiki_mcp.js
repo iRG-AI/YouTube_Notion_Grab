@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // ===== LLM Wiki MCP 서버 (stdio) =====
 // Claude Code/Desktop에서 Obsidian LLM Wiki를 검색하는 도구 제공.
-// 등록: claude mcp add wiki-search -- node /Users/tycoonan/Documents/Claude/Youtube_Notion_Grap/wiki_mcp.js
+// 등록: claude mcp add wiki-search -- node /Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap/wiki_mcp.js
 // 주의: stdout은 프로토콜 전용 — 모든 로그는 stderr로.
 
 const wiki = require('./lib/wiki_search');

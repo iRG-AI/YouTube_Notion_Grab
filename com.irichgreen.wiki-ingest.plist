@@ -7,7 +7,7 @@
 	<key>ProgramArguments</key>
 	<array>
 		<string>/usr/bin/python3</string>
-		<string>/Users/tycoonan/Documents/Claude/Youtube_Notion_Grap/wiki_ingest.py</string>
+		<string>/Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap/wiki_ingest.py</string>
 		<string>--full</string>
 	</array>
 	<key>RunAtLoad</key>
@@ -24,6 +24,6 @@
 		<integer>0</integer>
 	</dict>
 	<key>WorkingDirectory</key>
-	<string>/Users/tycoonan/Documents/Claude/Youtube_Notion_Grap</string>
+	<string>/Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap</string>
 </dict>
 </plist>
