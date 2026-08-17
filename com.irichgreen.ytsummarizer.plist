@@ -7,7 +7,7 @@
 	<key>ProgramArguments</key>
 	<array>
 		<string>/opt/homebrew/bin/node</string>
-		<string>/Users/사용자명/youtube-notion-app/scheduler.js</string>
+		<string>/Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap/scheduler.js</string>
 	</array>
 	<key>RunAtLoad</key>
 	<false/>
@@ -43,6 +43,6 @@
 		</dict>
 	</array>
 	<key>WorkingDirectory</key>
-	<string>/Users/사용자명/youtube-notion-app</string>
+	<string>/Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap</string>
 </dict>
 </plist>

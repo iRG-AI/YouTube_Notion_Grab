@@ -49,8 +49,7 @@ fi
 mkdir -p "$HOME/Library/LaunchAgents"
 
 sed \
-  -e "s|/Users/사용자명/youtube-notion-app/scheduler.js|$APP_DIR/scheduler.js|g" \
-  -e "s|/Users/사용자명/youtube-notion-app|$APP_DIR|g" \
+  -e "s|/Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap|$APP_DIR|g" \
   -e "s|/usr/local/bin/node|$NODE_PATH|g" \
   "$PLIST_SRC" > "$PLIST_DST"
 

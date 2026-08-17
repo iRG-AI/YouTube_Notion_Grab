@@ -37,7 +37,7 @@ mkdir -p "$HOME/Library/LaunchAgents"
 # plist 복사 및 경로 치환
 sed \
   -e "s|/usr/local/bin/node|$NODE_PATH|g" \
-  -e "s|/Users/사용자명/youtube-notion-app|$APP_DIR|g" \
+  -e "s|/Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap|$APP_DIR|g" \
   "$PLIST_SRC" > "$PLIST_DEST"
 
 # 기존 등록 해제 (있는 경우)

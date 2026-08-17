@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**현재 버전: v2.5** (2026-08-17) · 레포 경로: `/Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap`
+
+> 2026-08-17에 `~/Documents/Claude/` → `~/Documents/Claude/Projects/` 로 이관했습니다.
+> 이전 경로가 박힌 문서·스크립트를 발견하면 갱신 대상입니다.
+> 구 백업: `~/Claude/Youtube_Notion_Grap_BACKUP_20260717`.
+
 ## Commands
 
 ```bash
@@ -27,15 +33,41 @@ node migrate_classify.js --notion-only
 node migrate_classify.js --youtube-only --resume
 node migrate_classify.js --apply
 
+# 대기 큐 정리 (중복 제거 + dead-letter 격리) — 기본 dry-run
+node scripts/clean_pending_queue.js
+node scripts/clean_pending_queue.js --apply
+
 # launchd 제어 (6시간 자동 실행)
 launchctl start com.irichgreen.ytsummarizer
 launchctl stop com.irichgreen.ytsummarizer
 
-# YouTube OAuth 토큰 재발급 (1회성)
+# YouTube OAuth 토큰 재발급 (1회성) — 반드시 「타이쿤안」 채널 선택
 node oauth_setup.js
 
-# OAuth 연결 확인
+# OAuth 연결 확인 (토큰 발급 여부만 확인 — 계정 일치는 확인 못 함)
 node -e "require('./lib/youtube_oauth').getAccessToken().then(t => console.log('✅', t.slice(0,20))).catch(e => console.error('❌', e.message))"
+
+# 상태 스냅샷 (진단 1순위)
+cat .quota_state.json
+node -e "for(const f of ['pending_playlist_adds.json','pending_playlist_adds.dead.json'])console.log(f, JSON.parse(require('fs').readFileSync(f)).length)"
+```
+
+### OAuth 계정 일치 검증 (1유닛, 재발급 후 필수)
+
+토큰이 발급되는 것과 **33개 재생목록을 소유한 계정인지**는 별개입니다.
+재발급 직후 반드시 아래를 돌려 `✅ 일치`를 확인하세요.
+
+```bash
+cd /Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap && node -e "
+const yt=require('./lib/youtube_oauth');
+(async()=>{const t=await yt.getAccessToken();
+const j=await(await fetch('https://www.googleapis.com/youtube/v3/playlists?part=snippet&mine=true&maxResults=50',{headers:{Authorization:'Bearer '+t}})).json();
+if(j.error)return console.log('ERR',j.error.errors?.[0]?.reason);
+const mine=new Map((j.items||[]).map(x=>[x.id,x.snippet]));
+const want=require('./playlists.json').map(p=>(p.url.match(/list=([^&]+)/)||[])[1]).filter(Boolean);
+const hit=want.filter(x=>mine.has(x));
+console.log('채널:',[...new Set([...mine.values()].map(s=>s.channelTitle))].join(','),'| 일치',hit.length+'/'+want.length);
+console.log(hit.length===want.length?'✅ 일치':'❌ 불일치 — 재발급 필요');})();"
 ```
 
 ## 🚨 보안 및 안전 최우선 개발 원칙 (Security & Safety Guidelines)
@@ -82,8 +114,16 @@ YouTube "AI 영상목록" (마스터 모드)
 | `wiki_config.py` | Wiki 인제스트 설정 관리. 230 RPD 토큰 제한, API Rate limit 추적 및 예외 처리 로직 포함. |
 | `build_obsidian_wiki.py` | 키워드별 허브 파일 27개 자동 생성(`_MOC/Claude.md` 등) + MOC 재구성. |
 | `migrate_classify.js` | 기존 영상 일괄 재분류. `.migrate_state.json`으로 재개 가능. |
-| `playlists.json` | 33개 토픽 재생목록 목록. 분류기의 허용 토픽 소스이기도 함. |
-| `pending_playlist_adds.json` | YouTube quota 초과 시 적재되는 큐. 다음 cron 실행 시 자동 처리. |
+| `playlists.json` | 33개 토픽 재생목록 목록. 분류기의 허용 토픽 소스이기도 함. gitignore 대상. |
+| `scripts/clean_pending_queue.js` | (v2.5) 큐 중복 제거 + dead-letter 격리. 기본 dry-run, `--apply` 필요. |
+
+### 재생목록 대기 큐 파일 (v2.5)
+
+| 파일 | 역할 |
+|------|------|
+| `pending_playlist_adds.json` | 처리 대기 큐. quota 초과·실패 시 적재되고 다음 실행에서 소진. |
+| `pending_playlist_adds.dead.json` | 영구 실패·재시도 초과 격리 (dead-letter). 자동 복구되지 않음. |
+| `pending_playlist_adds.backup.*.json` | `clean_pending_queue.js --apply`가 만드는 백업. **삭제 금지.** |
 
 ### 외부 서비스
 
@@ -104,7 +144,36 @@ YouTube "AI 영상목록" (마스터 모드)
 - `rich_text` 항목당 최대 2000자 (`splitRichText()` 사용).
 - `rich_text` 배열 최대 100개 (`parseBoldRichText()` 결과 50개씩 묶어 paragraph 생성).
 
-**YouTube Quota**: 일일 10,000 유닛. `playlistItems.insert`는 50유닛. 임계(9,500유닛) 도달 시 `pending_playlist_adds.json`에 적재 후 다음날 처리.
+**YouTube Quota**: 일일 10,000 유닛, 태평양시 자정 리셋 = **KST 16:00**. `playlistItems.insert` 50유닛, 대부분의 읽기 1유닛, `search.list` 100유닛. 안전 버퍼 500을 뺀 임계 **9,500유닛**(`QUOTA_THRESHOLD`) 도달 시 `pending_playlist_adds.json`에 적재 후 다음 실행에서 처리.
+
+- **실패 요청도 quota를 동일하게 소비한다.** v2.5에서 `addToPlaylist`의 실패 경로에도 `consumeQuota(50)`을 넣었다(`lib/youtube_oauth.js:217`). 이전에는 실패가 계상되지 않아 `.quota_state.json`이 0에 머무른 채 실제 한도를 넘겼다.
+- 따라서 **하루 재생목록 추가 상한은 약 190건**이다(9,500 ÷ 50). 코드로 늘릴 수 없다.
+- 무료 할당량이자 상한선이라 **초과해도 과금되지 않는다.** 403으로 거부될 뿐이다.
+- `.quota_state.json`의 `date`가 오늘이 아니면 **그날 YouTube 쓰기가 한 건도 시도되지 않았다는 뜻**이다. 최우선 이상 신호.
+- 상태 파일이 멈춰 있으면 "동작 안 함"과 "계측 안 됨"을 **둘 다** 의심할 것. (2026-08-17 오판 이력)
+
+**대기 큐 안전장치 (v2.5) — 건드리지 말 것**
+
+`scheduler.js:flushPendingQueue()`와 `processMasterIngest()` 내부 `appendPending`에 들어간 장치입니다. 큐 로직을 바꾸면 **`migrate_classify.js`도 같은 큐 파일에 쓰므로 양쪽을 함께 고쳐야 합니다.**
+
+- `appendPending`은 `(videoId, playlistId)` 중복을 적재하지 않는다(`scheduler.js:1020`). 없으면 큐가 며칠 만에 2배로 부푼다. 실제 46.7%까지 중복된 이력이 있다.
+- `flushPendingQueue`는 **연속 실패 10회에서 큐 처리를 중단**한다(`scheduler.js:807`). 403을 수백 번 난사하면 구글이 어뷰징으로 판단해 계정을 정지시킨다. 보안 원칙 1의 구현체다.
+- `invalid_grant` / `Token refresh failed` 감지 시 큐를 보존한 채 즉시 중단한다.
+- 영구 실패 사유(`playlistItemsNotAccessible`, `playlistNotFound`, `videoNotFound`, `forbidden`)는 dead-letter로 격리한다.
+- 그 외 실패는 `retryCount` 5회 초과 시 dead-letter로 보낸다. 무한 순환 금지.
+
+**YouTube OAuth — 가장 자주 깨지는 지점**
+
+```
+필요 채널 : 타이쿤안 (UCGDu0ceSSUgzhrRHbW0pQ9w)
+GCP       : youtube-data-api-487306, 게시 상태 = 프로덕션
+```
+
+- 토큰 재발급 시 **반드시 「타이쿤안」 채널을 선택**한다. 다른 계정/채널로 발급하면 33개 재생목록 전체에 `403 playlistItemsNotAccessible`이 난다.
+- **이 에러를 "재생목록이 삭제됨"으로 단정하지 말 것. 계정 불일치를 먼저 의심한다.** 2026-08-17에 이 오판으로 복구 가능한 165건을 영구 폐기할 뻔했다.
+- GCP 게시 상태가 「테스트」로 돌아가면 refresh token이 **7일마다 만료**된다. `invalid_grant`가 재발하면 게시 상태부터 확인한다.
+- 재발급 중 `accounts.google.com/info/unknownerror`가 뜨면 다중 로그인 세션 충돌이다. 출력된 URL을 **시크릿 창**에 붙여넣는다.
+- 발급 후 위 §"OAuth 계정 일치 검증"을 먼저 돌린다(1유닛).
 
 **Gemini API 최적화 (중요)**: Gemini 2.5 Flash 모델 사용 시 내부 추론 과정에서 과다한 "Thinking 토큰" 과금을 방지하기 위해 반드시 API 호출 옵션에 `generationConfig: { thinkingConfig: { thinkingBudget: 0 } }`를 적용해야 합니다 (비용 85% 절감 효과).
 
@@ -112,8 +181,43 @@ YouTube "AI 영상목록" (마스터 모드)
 
 **server.js 보안**: Notion API 프록시는 `ALLOWED_NOTION_PATHS` 화이트리스트만 통과. CORS는 `localhost:3000`만 허용. IP당 분당 120요청 rate limit.
 
+### launchd 데몬 3종
+
+| 라벨 | 실행 대상 | 스케줄 | 인터프리터 |
+|------|-----------|--------|-----------|
+| `com.irichgreen.server` | `server.js` (포트 3000) | `KeepAlive`, `RunAtLoad` — 상주 | `/opt/homebrew/bin/node` |
+| `com.irichgreen.ytsummarizer` | `scheduler.js` | 00 / 06 / 12 / 18시 | `/opt/homebrew/bin/node` |
+| `com.irichgreen.wiki-ingest` | `wiki_ingest.py --full` | 매일 03:00 | `/usr/bin/python3` (시스템 파이썬) |
+
+- **실제 동작하는 plist는 `~/Library/LaunchAgents/`에 있다.** 레포 루트의 plist 3개는 그 원본이며, 2026-08-17부터 3개 모두 실경로(`/Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap`)가 들어 있다. 예전에 `server`·`ytsummarizer` 두 개에 있던 `/Users/사용자명/youtube-notion-app` 플레이스홀더는 제거했다.
+- 각 plist는 `ProgramArguments`·`WorkingDirectory` **2곳에 절대경로**가 박혀 있다. 경로 변경 시 6군데 동기화 + `plutil -lint` + unload/load.
+- `install-server.sh`·`install-scheduler.sh`는 plist를 `~/Library/LaunchAgents/`로 복사하며 **sed로 이 실경로를 `$APP_DIR`로 치환**한다. 레포 경로를 바꾸면 두 스크립트의 sed 패턴도 같이 고쳐야 치환이 동작한다.
+- `com.irichgreen.server`는 상주 프로세스라 **코드를 고쳐도 재기동 전까지 반영되지 않는다.**
+- **`brew upgrade` 후에는 상주 데몬을 반드시 재기동한다.** 데몬은 기동 시점의 Cellar 경로를 물고 도는데, 업그레이드로 그 폴더가 삭제되면 이후 지연 import가 전부 실패한다. 이미 로드된 모듈은 멀쩡히 동작해 **부분 실패로 나타나므로 알아채기 어렵다.** (2026-08-17 자매 프로젝트 실장애)
+
+### 보안 — 절대 커밋 금지
+
+`.gitignore` 대상: `.env`, `.env.*`, `node_modules/`, `__pycache__/`, `*.log`, `playlists.json`, `.DS_Store`, `.claude/settings.local.json`, `wiki_index.json`, `wiki_index.vec`, `.migrate_state.json`, `.quota_state.json`, `.wiki_state.json`, `.wiki_quota.json`, `pending_playlist_adds*`
+
+> ⚠️ **새 상태 파일을 만들면 `.gitignore` 패턴을 반드시 재확인한다.**
+> `pending_playlist_adds.json*` 패턴이 `.dead.json`·`.backup.*.json`을 못 잡아 커밋될 뻔한 사고가 있었다(2026-08-17). 현재는 `pending_playlist_adds*`로 수정됨.
+> 새 파일 추가 시 `git check-ignore -q <파일>`로 확인할 것.
+
+`.env`·`.claude/`·상태 파일은 gitignore라 **`git clone`으로 복제되지 않는다.** 환경 이전은 clone이 아니라 `mv`/수동 복사로 한다.
+
 ### 로그 파일
 
-- `scheduler.log` / `scheduler-stdout.log`: 스케줄러 실행 로그 (용량 큼, 주기적 확인 필요)
+- `scheduler.log` / `scheduler-stdout.log`: 스케줄러 실행 로그. **현재 약 20MB. 로테이션 미도입.** 통째로 읽지 말고 `tail`/`grep`으로 볼 것.
 - `server.log`: 서버 요청 로그
 - Obsidian vault의 `log.md`: wiki 변경 이력
+
+### 진단 원칙
+
+추측하지 말고 근거를 먼저 확보한다 — 로그(`tail`/`grep`), `git status`, `launchctl list | grep irichgreen`, 파일 mtime, `.quota_state.json`, 큐 파일 건수.
+
+---
+
+## 변경 이력
+
+- **2026-08-17 (v2.5)** — 레포를 `Projects/` 하위로 이관. 대기 큐 안전장치 도입(중복 방지·연속 실패 10회 차단기·dead-letter 격리·실패 요청 quota 계상), `scripts/clean_pending_queue.js` 신규, `.gitignore` 패턴 수정. OAuth 토큰을 「타이쿤안」 채널로 재발급하고 GCP 게시 상태를 프로덕션으로 전환. 큐 5,392 → 2,365 정리. 커밋 `66ab4a2`.
+- **2026-05-21** — 최초 작성.
