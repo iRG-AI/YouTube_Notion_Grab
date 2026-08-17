@@ -335,6 +335,96 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ── LLM Wiki 검색 페이지 ──
+  if (parsedUrl.pathname === '/wiki' && req.method === 'GET') {
+    fs.readFile(path.join(__dirname, 'wiki.html'), (err, data) => {
+      if (err) { res.writeHead(404); res.end('Not Found'); return; }
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'Cache-Control': 'no-store',
+      });
+      res.end(data);
+    });
+    return;
+  }
+
+  // ── LLM Wiki 토픽 목록 (필터 드롭다운용) ──
+  if (parsedUrl.pathname === '/api/wiki-topics' && req.method === 'GET') {
+    try {
+      const topics = require('./lib/wiki_search').listTopics();
+      res.writeHead(200, CORS);
+      res.end(JSON.stringify({ topics }));
+    } catch (e) {
+      res.writeHead(500, CORS);
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+
+  // ── LLM Wiki 검색 API ──
+  if (parsedUrl.pathname === '/api/wiki-search' && req.method === 'GET') {
+    const q = (parsedUrl.searchParams.get('q') || '').trim();
+    if (!q || q.length > 500) {
+      res.writeHead(400, CORS);
+      res.end(JSON.stringify({ error: '검색어(q)는 1~500자여야 합니다.' }));
+      return;
+    }
+    const topic = (parsedUrl.searchParams.get('topic') || '').trim();
+    const limit = Math.min(parseInt(parsedUrl.searchParams.get('limit') || '10', 10) || 10, 30);
+    const wikiSearch = require('./lib/wiki_search');
+    wikiSearch.search(q, { topic, limit })
+      .then(({ results, mode }) => {
+        res.writeHead(200, CORS);
+        res.end(JSON.stringify({ results, mode }));
+      })
+      .catch(e => {
+        console.error('[wiki-search] 오류:', e.message);
+        res.writeHead(500, CORS);
+        res.end(JSON.stringify({ error: e.message }));
+      });
+    return;
+  }
+
+  // ── LLM Wiki AI 답변 API (RAG) ──
+  if (parsedUrl.pathname === '/api/wiki-ask' && req.method === 'POST') {
+    collectBody(req, (err, body) => {
+      if (err) {
+        res.writeHead(413, CORS);
+        res.end(JSON.stringify({ error: err.message }));
+        return;
+      }
+      let question = '';
+      try { question = (JSON.parse(body || '{}').question || '').trim(); } catch (e) {}
+      if (!question || question.length > 500) {
+        res.writeHead(400, CORS);
+        res.end(JSON.stringify({ error: '질문(question)은 1~500자여야 합니다.' }));
+        return;
+      }
+      const wikiSearch = require('./lib/wiki_search');
+      wikiSearch.ask(question)
+        .then(result => {
+          res.writeHead(200, CORS);
+          res.end(JSON.stringify(result));
+        })
+        .catch(e => {
+          console.error('[wiki-ask] 오류:', e.message);
+          // 답변 생성 실패 시에도 검색 결과는 최대한 반환
+          wikiSearch.search(question, { limit: 8 })
+            .then(({ results }) => {
+              res.writeHead(503, CORS);
+              res.end(JSON.stringify({ error: 'AI 답변 생성 불가 (일일 한도 도달 또는 API 중단)', results }));
+            })
+            .catch(() => {
+              res.writeHead(500, CORS);
+              res.end(JSON.stringify({ error: e.message }));
+            });
+        });
+    });
+    return;
+  }
+
   // ── HTML 서빙 ──
   if (parsedUrl.pathname === '/' || parsedUrl.pathname === '/index.html') {
     fs.readFile(path.join(__dirname, 'index.html'), (err, data) => {

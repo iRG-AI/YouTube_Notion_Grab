@@ -15,6 +15,8 @@ node_modules/
 .env.*
 
 # 런타임 상태 파일
+wiki_index.json
+wiki_index.vec
 .migrate_state.json
 .quota_state.json
 migration_preview.csv

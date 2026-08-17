@@ -1239,7 +1239,9 @@ async function main() {
       totalError += result.error;
       results.push({ name: 'AI 영상목록 (마스터)', ...result });
     } catch (e) {
-      log(`❌ 마스터 인제스트 오류: ${e.message}`);
+      const errMsg = e instanceof Error ? (e.stack || e.message) : String(e);
+      log(`❌ 마스터 인제스트 오류:\n${errMsg}`);
+      totalError += 1;
       results.push({ name: 'AI 영상목록 (마스터)', saved: 0, skip: 0, error: 1 });
     }
   } else {
@@ -1254,7 +1256,9 @@ async function main() {
         totalError += result.error;
         results.push({ name: pl.name, ...result });
       } catch (e) {
-        log(`❌ 재생목록 처리 중 오류: ${e.message}`);
+        const errMsg = e instanceof Error ? (e.stack || e.message) : String(e);
+        log(`❌ 재생목록 처리 중 오류:\n${errMsg}`);
+        totalError += 1;
         results.push({ name: pl.name, saved: 0, skip: 0, error: 1 });
       }
     }
@@ -1330,7 +1334,9 @@ async function main() {
   execFile(python3, syncArgs, { cwd: __dirname }, async (err, stdout, stderr) => {
     if (err) {
       log(`❌ Obsidian 동기화 오류: ${err.message}`);
-      await sendTelegram(msg + `\n\n⚠️ Obsidian 동기화 실패`);
+      if (totalSaved > 0) {
+        await sendTelegram(msg + `\n\n⚠️ Obsidian 동기화 실패`);
+      }
       return;
     }
     const jsonLine = stdout.split('\n').find(l => l.startsWith('RESULT_JSON:'));
@@ -1347,13 +1353,23 @@ async function main() {
           `  • 소요시간: ${r.elapsed}초`,
         ].join('\n');
         log(`✅ Obsidian 동기화 완료! 추가: ${r.added}개`);
-        await sendTelegram(msg + obsSection);
+
+        const hasNewOrUpdated = totalSaved > 0 || (r.added && r.added > 0) || (r.tags_updated && r.tags_updated > 0);
+        if (hasNewOrUpdated) {
+          await sendTelegram(msg + obsSection);
+        } else {
+          log(`ℹ️  신규 저장/업데이트된 동영상이 없으므로 텔레그램 메시지 발송 생략`);
+        }
       } catch(e) {
         log(`⚠️ Obsidian 결과 파싱 오류: ${e.message}`);
-        await sendTelegram(msg);
+        if (totalSaved > 0) {
+          await sendTelegram(msg);
+        }
       }
     } else {
-      await sendTelegram(msg);
+      if (totalSaved > 0) {
+        await sendTelegram(msg);
+      }
     }
   });
 }

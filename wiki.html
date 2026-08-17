@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🧠 AI LLM Wiki 검색</title>
+<link rel="icon" href="favicon.svg">
+<style>
+  :root {
+    --bg: #f7f8fa; --card: #ffffff; --text: #1a1d24; --sub: #6b7280;
+    --accent: #4f46e5; --accent-soft: #eef2ff; --border: #e5e7eb; --green: #059669;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, 'Apple SD Gothic Neo', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .container { max-width: 860px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 26px; margin-bottom: 6px; }
+  .subtitle { color: var(--sub); font-size: 14px; margin-bottom: 28px; }
+  .search-box { display: flex; gap: 10px; margin-bottom: 10px; }
+  .search-box input {
+    flex: 1; padding: 14px 18px; font-size: 16px; border: 2px solid var(--border);
+    border-radius: 12px; outline: none; background: var(--card);
+  }
+  .search-box input:focus { border-color: var(--accent); }
+  button {
+    padding: 14px 22px; font-size: 15px; font-weight: 600; border: none;
+    border-radius: 12px; cursor: pointer; background: var(--accent); color: #fff;
+  }
+  button:disabled { opacity: 0.5; cursor: default; }
+  button.secondary { background: var(--accent-soft); color: var(--accent); }
+  .examples { font-size: 13px; color: var(--sub); margin-bottom: 24px; }
+  .examples a { color: var(--accent); cursor: pointer; text-decoration: none; margin-right: 10px; }
+  .status { font-size: 13px; color: var(--sub); margin: 14px 2px; }
+  .answer {
+    background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--green);
+    border-radius: 12px; padding: 20px 22px; margin-bottom: 24px; line-height: 1.75;
+    font-size: 15px; white-space: pre-wrap; display: none;
+  }
+  .answer .sources { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 13px; white-space: normal; }
+  .answer .sources a { color: var(--accent); text-decoration: none; display: block; margin-top: 5px; }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 12px;
+    display: flex; gap: 16px; align-items: flex-start;
+  }
+  .card .thumb { flex: 0 0 200px; }
+  .card .thumb img { width: 200px; border-radius: 8px; display: block; }
+  .card .card-body { flex: 1; min-width: 0; }
+  @media (max-width: 640px) { .card .thumb { display: none; } }
+  .card .title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .card .meta { font-size: 12.5px; color: var(--sub); margin-bottom: 8px; }
+  .card .meta .topic { color: var(--accent); font-weight: 600; }
+  .card .snippet { font-size: 13.5px; color: #374151; line-height: 1.6; margin-bottom: 10px; }
+  .card .links a {
+    font-size: 12.5px; color: var(--accent); text-decoration: none; margin-right: 14px;
+  }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🧠 AI LLM Wiki 검색</h1>
+  <div class="subtitle">유튜브 AI 영상 요약 지식베이스 — 의미 기반 검색 + AI 답변</div>
+
+  <div class="search-box">
+    <input id="q" type="text" placeholder="예: 힉스필드 MCP로 동영상 만드는 법" maxlength="500" autofocus>
+    <select id="limitSel" style="padding: 0 12px; font-size: 14px; border: 2px solid var(--border); border-radius: 12px; background: var(--card); outline: none;">
+      <option value="10">10건</option>
+      <option value="15" selected>15건</option>
+      <option value="30">30건</option>
+    </select>
+    <button id="btnSearch" onclick="doSearch()">검색</button>
+    <button id="btnAsk" class="secondary" onclick="doAsk()">AI 답변</button>
+  </div>
+  <div class="filters" style="display: flex; gap: 8px; margin-bottom: 10px;">
+    <select id="topicSel" style="padding: 8px 12px; font-size: 13.5px; border: 2px solid var(--border); border-radius: 10px; background: var(--card); outline: none;">
+      <option value="">📁 전체 토픽</option>
+    </select>
+    <select id="sortSel" style="padding: 8px 12px; font-size: 13.5px; border: 2px solid var(--border); border-radius: 10px; background: var(--card); outline: none;">
+      <option value="score">🎯 관련도순</option>
+      <option value="date_desc">🕐 최신순</option>
+      <option value="date_asc">📜 오래된순</option>
+      <option value="views">🔥 조회수순</option>
+    </select>
+  </div>
+  <div class="examples">
+    <a onclick="fill('힉스필드 MCP로 동영상 만드는 법')">힉스필드 MCP 영상 제작</a>
+    <a onclick="fill('AI 에이전트로 사업화하는 방법')">AI 에이전트 사업화</a>
+    <a onclick="fill('최신 클로드 스킬과 팁')">최신 클로드 스킬</a>
+  </div>
+
+  <div id="status" class="status"></div>
+  <div id="answer" class="answer"></div>
+  <div id="results"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function fill(text) { $('q').value = text; doSearch(); }
+$('q').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+
+// ── 필터/정렬 상태 ──
+let lastResults = [], lastMode = 'vector';
+
+fetch('/api/wiki-topics').then(r => r.json()).then(({ topics }) => {
+  $('topicSel').innerHTML = '<option value="">📁 전체 토픽 (' + topics.reduce((s, t) => s + t.count, 0) + ')</option>' +
+    topics.map(t => `<option value="${esc(t.topic)}">${esc(t.topic)} (${t.count})</option>`).join('');
+}).catch(() => {});
+
+$('topicSel').addEventListener('change', () => { if ($('q').value.trim()) doSearch(); });
+$('sortSel').addEventListener('change', () => renderResults(lastResults, lastMode));
+
+function applySort(results) {
+  const sort = $('sortSel').value;
+  const sorted = [...results];
+  if (sort === 'date_desc') sorted.sort((a, b) => (b.upload_date || '').localeCompare(a.upload_date || ''));
+  else if (sort === 'date_asc') sorted.sort((a, b) => (a.upload_date || '').localeCompare(b.upload_date || ''));
+  else if (sort === 'views') sorted.sort((a, b) => (b.view_count || 0) - (a.view_count || 0));
+  return sorted; // 'score': API가 이미 관련도순
+}
+
+function renderResults(results, mode) {
+  lastResults = results || [];
+  lastMode = mode;
+  if (!results || results.length === 0) {
+    $('results').innerHTML = '<div class="status">검색 결과가 없습니다.</div>';
+    return;
+  }
+  $('results').innerHTML = applySort(results).map(r => {
+    const obsUrl = 'obsidian://open?vault=' + encodeURIComponent('AI LLM Wiki') +
+                   '&file=' + encodeURIComponent(r.path.replace(/\.md$/, ''));
+    const hasVideo = r.video_url && r.video_url !== 'null';
+    const vid = hasVideo ? r.video_url.match(/(?:v=|youtu\.be\/|shorts\/)([\w-]{11})/) : null;
+    const thumbHtml = vid
+      ? `<a class="thumb" href="${esc(r.video_url)}" target="_blank"><img src="https://i.ytimg.com/vi/${vid[1]}/mqdefault.jpg" loading="lazy" alt="" onerror="this.parentNode.style.display='none'"></a>`
+      : '';
+    return `<div class="card">
+      ${thumbHtml}
+      <div class="card-body">
+      <div class="title">${esc(r.title)}</div>
+      <div class="meta"><span class="topic">${esc(r.topic)}</span> · ${esc(r.channel)} · ${esc(r.upload_date)} · 조회수 ${(r.view_count || 0).toLocaleString()} · 유사도 ${r.score}</div>
+      <div class="snippet">${esc(r.snippet)}</div>
+      <div class="links">
+        ${hasVideo ? `<a href="${esc(r.video_url)}" target="_blank">▶ YouTube</a>` : ''}
+        <a href="${obsUrl}">📓 Obsidian에서 열기</a>
+      </div>
+      </div>
+    </div>`;
+  }).join('');
+  if (mode === 'keyword') {
+    $('status').innerHTML = '⚠️ 임베딩 한도 도달 — 키워드 검색으로 대체됨 (' + results.length + '건)';
+  }
+}
+
+async function doSearch() {
+  const q = $('q').value.trim();
+  if (!q) return;
+  $('btnSearch').disabled = true;
+  $('answer').style.display = 'none';
+  $('status').innerHTML = '<span class="spinner"></span>검색 중...';
+  try {
+    const res = await fetch('/api/wiki-search?q=' + encodeURIComponent(q) + '&limit=' + $('limitSel').value +
+      ($('topicSel').value ? '&topic=' + encodeURIComponent($('topicSel').value) : ''));
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.status);
+    $('status').textContent = `${data.results.length}건 (${data.mode === 'vector' ? '의미 검색' : '키워드 검색'})`;
+    renderResults(data.results, data.mode);
+  } catch (e) {
+    $('status').textContent = '❌ 검색 오류: ' + e.message;
+  } finally {
+    $('btnSearch').disabled = false;
+  }
+}
+
+async function doAsk() {
+  const q = $('q').value.trim();
+  if (!q) return;
+  $('btnAsk').disabled = true;
+  $('status').innerHTML = '<span class="spinner"></span>관련 영상 검색 후 AI 답변 생성 중... (10~20초)';
+  $('answer').style.display = 'none';
+  try {
+    const res = await fetch('/api/wiki-ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: q }),
+    });
+    const data = await res.json();
+    if (res.status === 503) {
+      $('status').textContent = '⚠️ ' + data.error + ' — 검색 결과만 표시합니다.';
+      renderResults(data.results, 'vector');
+      return;
+    }
+    if (!res.ok) throw new Error(data.error || res.status);
+    $('status').textContent = '';
+    const srcHtml = (data.sources || []).map(s =>
+      `<a href="${esc(s.video_url)}" target="_blank">[${s.n}] ${esc(s.title)} — ${esc(s.channel)} (${esc(s.upload_date)})</a>`
+    ).join('');
+    $('answer').innerHTML = esc(data.answer) + `<div class="sources"><strong>📚 출처</strong>${srcHtml}</div>`;
+    $('answer').style.display = 'block';
+  } catch (e) {
+    $('status').textContent = '❌ AI 답변 오류: ' + e.message;
+  } finally {
+    $('btnAsk').disabled = false;
+  }
+}
+</script>
+</body>
+</html>

@@ -74,38 +74,64 @@ def log(msg): print(msg, flush=True)
 
 # ── Notion API 호출 ──
 def notion_call(method, path, body=None):
-    ctx = ssl.create_default_context()
     data = json.dumps(body).encode('utf-8') if body else None
-    req = Request(
-        f'https://api.notion.com{path}',
-        data=data, method=method,
-        headers={
-            'Authorization': f'Bearer {NOTION_TOKEN}',
-            'Content-Type': 'application/json',
-            'Notion-Version': '2022-06-28',
-        }
-    )
-    with urlopen(req, context=ctx, timeout=30) as res:
-        return json.loads(res.read())
+    for attempt in range(5):
+        try:
+            ctx = ssl.create_default_context()
+            req = Request(
+                f'https://api.notion.com{path}',
+                data=data, method=method,
+                headers={
+                    'Authorization': f'Bearer {NOTION_TOKEN}',
+                    'Content-Type': 'application/json',
+                    'Notion-Version': '2022-06-28',
+                }
+            )
+            with urlopen(req, context=ctx, timeout=30) as res:
+                return json.loads(res.read())
+        except Exception as e:
+            if attempt == 4:
+                raise e
+            time.sleep(1)
 
 # ── 파일명 안전 변환 ──
 def safe_filename(s):
     return re.sub(r'[\/\\:*?"<>|#]', '_', s or 'untitled').strip()[:120]
 
-# ── 기존 Vault 파일 notion_id 목록 수집 ──
-def get_existing_notion_ids():
-    """notion_id → 파일 경로 dict 반환 (ids 집합도 .keys()로 추출 가능)"""
+# ── 기존 Vault 파일 정보 수집 (notion_id, relpath, video_url) ──
+def get_existing_vault_info():
+    """
+    id_to_path: notion_id -> fpath
+    relpath_set: Vault 상대 파일 경로 집합
+    url_to_path: video_url -> fpath
+    """
     id_to_path = {}
+    relpath_set = set()
+    url_to_path = {}
+
     for root, dirs, files in os.walk(VAULT):
         dirs[:] = [d for d in dirs if not d.startswith('.') and d != '_MOC']
         for f in files:
             if not f.endswith('.md'): continue
             fpath = os.path.join(root, f)
-            content = nfc(open(fpath, encoding='utf-8', errors='ignore').read())
-            m = re.search(r'^notion_id:\s*(.+)$', content, re.MULTILINE)
-            if m:
-                id_to_path[m.group(1).strip()] = fpath
+            relpath = nfc(os.path.relpath(fpath, VAULT))
+            relpath_set.add(relpath)
+            try:
+                content = nfc(open(fpath, encoding='utf-8', errors='ignore').read())
+                m_id = re.search(r'^notion_id:\s*(.+)$', content, re.MULTILINE)
+                if m_id:
+                    id_to_path[m_id.group(1).strip()] = fpath
+                m_url = re.search(r'^video_url:\s*(.+)$', content, re.MULTILINE)
+                if m_url and m_url.group(1).strip() != 'null':
+                    url_to_path[m_url.group(1).strip()] = fpath
+            except Exception:
+                pass
+    return id_to_path, relpath_set, url_to_path
+
+def get_existing_notion_ids():
+    id_to_path, _, _ = get_existing_vault_info()
     return id_to_path
+
 
 # ── 기존 .md 파일의 frontmatter tags 업데이트 ──
 def update_tags_in_file(fpath, new_topics):
@@ -246,16 +272,47 @@ def load_all_notion_pages():
     log(f'  총 {len(pages)}개 페이지\n')
     return pages
 
+def get_target_relpath(page):
+    props   = page.get('properties', {})
+    title   = ''.join(t.get('text', {}).get('content', '') for t in props.get('영상 제목', {}).get('title', []))
+    channel = ''.join(t.get('text', {}).get('content', '') for t in props.get('유튜브 채널', {}).get('rich_text', []))
+    topics  = [t.get('name', '') for t in props.get('주제', {}).get('multi_select', [])]
+    folder  = topics[0] if topics else '기타'
+    upload_date = props.get('업로드 일자', {}).get('date', {}).get('start', '') or ''
+    date_part   = (upload_date[:10].replace('-', '') if upload_date else '00000000')
+
+    filename = nfc(safe_filename(f'{channel}_{title}_{date_part}') + '.md')
+    folder_name = nfc(safe_filename(folder))
+    return nfc(os.path.join(folder_name, filename))
+
 def sync_new_pages(pages=None):
-    log('📦 기존 Vault notion_id 수집 중...')
-    id_to_path = get_existing_notion_ids()
+    log('📦 기존 Vault 파일 및 notion_id 정보 수집 중...')
+    id_to_path, relpath_set, url_to_path = get_existing_vault_info()
     existing_ids = set(id_to_path.keys())
-    log(f'  기존 파일: {len(existing_ids)}개\n')
+    log(f'  기존 notion_id 등록 파일: {len(existing_ids)}개, Vault md 문서: {len(relpath_set)}개\n')
 
     if pages is None:
         pages = load_all_notion_pages()
 
-    new_pages = [p for p in pages if p['id'] not in existing_ids]
+    new_pages = []
+    seen_targets = set()
+
+    for page in pages:
+        pid = page['id']
+        if pid in existing_ids:
+            continue
+
+        target_relpath = get_target_relpath(page)
+        props = page.get('properties', {})
+        video_url = props.get('영상 URL', {}).get('url', '') or ''
+
+        # 이미 Vault에 동일 상대 경로 문서가 존재하거나 동일 video_url 문서가 존재하는 경우 스킵 (중복 노션 페이지 무한 덮어쓰기 방지)
+        if target_relpath in relpath_set or (video_url and video_url in url_to_path) or target_relpath in seen_targets:
+            continue
+
+        seen_targets.add(target_relpath)
+        new_pages.append(page)
+
     log(f'✨ 신규 영상: {len(new_pages)}개\n')
 
     added = 0
@@ -324,6 +381,17 @@ if __name__ == '__main__':
                 log('✅ Wiki Ingest 완료!')
         else:
             log('ℹ️  wiki_ingest.py 없음 — 건너뜀')
+
+    # 4단계: 검색 인덱스 증분 갱신 (신규/변경이 있을 때만)
+    if added > 0 or tags_updated > 0 or force:
+        log('\n🔍 검색 인덱스 갱신 중...')
+        idx_script = os.path.join(SCRIPT_DIR, 'build_search_index.py')
+        if os.path.exists(idx_script):
+            idx_result = subprocess.run([sys.executable, idx_script], capture_output=True, text=True)
+            if idx_result.returncode != 0:
+                log(f'❌ 검색 인덱스 갱신 오류:\n{idx_result.stderr[:200]}')
+            else:
+                log('✅ 검색 인덱스 갱신 완료!')
 
     elapsed = round(time.time() - start)
     log('\n🎉 Obsidian 동기화 완료!')
