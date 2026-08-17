@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**현재 버전: v2.5** (2026-08-17) · 레포 경로: `/Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap`
+**현재 버전: v2.6** (2026-08-17) · 레포 경로: `/Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap`
 
 > 2026-08-17에 `~/Documents/Claude/` → `~/Documents/Claude/Projects/` 로 이관했습니다.
 > 이전 경로가 박힌 문서·스크립트를 발견하면 갱신 대상입니다.
@@ -149,7 +149,8 @@ YouTube "AI 영상목록" (마스터 모드)
 - **실패 요청도 quota를 동일하게 소비한다.** v2.5에서 `addToPlaylist`의 실패 경로에도 `consumeQuota(50)`을 넣었다(`lib/youtube_oauth.js:217`). 이전에는 실패가 계상되지 않아 `.quota_state.json`이 0에 머무른 채 실제 한도를 넘겼다.
 - 따라서 **하루 재생목록 추가 상한은 약 190건**이다(9,500 ÷ 50). 코드로 늘릴 수 없다.
 - 무료 할당량이자 상한선이라 **초과해도 과금되지 않는다.** 403으로 거부될 뿐이다.
-- `.quota_state.json`의 `date`가 오늘이 아니면 **그날 YouTube 쓰기가 한 건도 시도되지 않았다는 뜻**이다. 최우선 이상 신호.
+- **일 경계는 태평양시(PT) 기준이다** (v2.6). `todayKey()`가 `Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' })`를 쓴다(`lib/youtube_oauth.js:45`). UTC를 쓰면 카운터만 KST 09:00에 리셋돼 **09:00~16:00 동안 스로틀이 무력화**된다. 실패도 50유닛을 먹으므로 소진된 quota에 계속 요청을 밀어넣게 된다. **날짜 키를 만드는 코드를 새로 쓸 때는 반드시 `todayKey()`를 재사용할 것** — `scheduler.js:1360`의 텔레그램 경고도 같은 키를 써야 오경보가 안 난다.
+- `.quota_state.json`의 `date`가 **PT 기준 오늘**이 아니면 그날 YouTube 쓰기가 한 건도 시도되지 않았다는 뜻이다. 최우선 이상 신호.
 - 상태 파일이 멈춰 있으면 "동작 안 함"과 "계측 안 됨"을 **둘 다** 의심할 것. (2026-08-17 오판 이력)
 
 **대기 큐 안전장치 (v2.5) — 건드리지 말 것**
@@ -219,5 +220,6 @@ GCP       : youtube-data-api-487306, 게시 상태 = 프로덕션
 
 ## 변경 이력
 
+- **2026-08-17 (v2.6)** — quota 일 경계를 UTC → 태평양시(PT)로 교정. `todayKey()`를 `Intl` 기반으로 바꾸고 export해 `scheduler.js:1360`이 같은 키를 쓰게 했다(텔레그램 오경보 제거). KST 09:00~16:00 동안 스로틀이 무력화되던 구간을 없앴다. 지시서 `docs/tasks/2026-08-17-quota-day-boundary.md`. 커밋 `7eb112c`.
 - **2026-08-17 (v2.5)** — 레포를 `Projects/` 하위로 이관. 대기 큐 안전장치 도입(중복 방지·연속 실패 10회 차단기·dead-letter 격리·실패 요청 quota 계상), `scripts/clean_pending_queue.js` 신규, `.gitignore` 패턴 수정. OAuth 토큰을 「타이쿤안」 채널로 재발급하고 GCP 게시 상태를 프로덕션으로 전환. 큐 5,392 → 2,365 정리. 커밋 `66ab4a2`.
 - **2026-05-21** — 최초 작성.
