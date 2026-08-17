@@ -791,11 +791,27 @@ bash install-wiki-ingest.sh
       
       <div class="timeline">
         
-        <!-- v2.5 -->
+        <!-- v2.6 -->
         <div class="timeline-item latest">
           <div class="timeline-version">
-            <span>v2.5</span>
+            <span>v2.6</span>
             <span class="v-badge" style="background: linear-gradient(135deg, var(--emerald), var(--indigo));">Active / Latest</span>
+            <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: normal;">— 2026-08-17</span>
+          </div>
+          <div class="timeline-desc">
+            <strong>quota 일 경계 태평양시(PT) 교정</strong>
+            <ul>
+              <li><strong>일 경계 UTC → PT 교정</strong>: <code>lib/youtube_oauth.js</code>의 <code>todayKey()</code>가 UTC 날짜를 쓰던 탓에 로컬 카운터가 KST 09:00에 0으로 리셋되는 반면, YouTube 실제 quota는 태평양시 자정(= KST 16:00)에 리셋되어 <strong>KST 09:00~16:00 구간에서 <code>checkQuotaAvailable()</code>이 무조건 통과</strong>하던 문제를 교정. 실패 요청도 50유닛을 소비하므로(v2.5) 이 구간에서는 이미 소진된 quota에 계속 요청을 밀어넣는 상태였음. <code>Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles' })</code> 기반으로 변경하여 DST(PDT/PST) 전환도 자동 처리.</li>
+              <li><strong>텔레그램 오경보 제거</strong>: <code>scheduler.js</code>의 quota 미갱신 경고가 동일한 UTC 키로 비교하던 탓에 KST 09:00~16:00 사이에는 정상 동작 중에도 <code>🛑 오늘 YouTube 쓰기 0건</code>이 발송되던 문제를 교정. <code>todayKey()</code>를 export하여 스케줄러와 quota 추적기가 같은 날짜 키를 공유하도록 일원화함.</li>
+              <li>임계값(9,500)·소비량(50/1유닛)·대기큐 안전장치는 변경 없음.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- v2.5 -->
+        <div class="timeline-item">
+          <div class="timeline-version">
+            <span>v2.5</span>
             <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: normal;">— 2026-08-17</span>
           </div>
           <div class="timeline-desc">

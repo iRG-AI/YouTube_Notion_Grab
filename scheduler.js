@@ -1357,7 +1357,7 @@ async function main() {
     if (pendingCount >= 1000) queueLines.push(`⚠️ 큐 적체 — 원인 확인 필요`);
     try {
       const qs = JSON.parse(fs.readFileSync(path.join(__dirname, '.quota_state.json'), 'utf-8'));
-      const today = new Date().toISOString().slice(0, 10);
+      const today = require('./lib/youtube_oauth').todayKey();
       if (qs.date !== today) queueLines.push(`🛑 오늘 YouTube 쓰기 0건 — quota_state 마지막 갱신 ${qs.date}`);
     } catch {}
   }
