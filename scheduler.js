@@ -1349,17 +1349,38 @@ async function main() {
 
   // ── pending 큐 적체 경고 (3개월간 아무도 모르고 5,392건까지 쌓인 사고 재발 방지) ──
   const queueLines = [];
-  const pendingCount = (() => {
-    try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'pending_playlist_adds.json'), 'utf-8')).length; } catch { return 0; }
+  // 큐 파일을 한 번만 읽어 잔량과 오늘 유입을 함께 구한다.
+  const queueSnapshot = (() => {
+    try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'pending_playlist_adds.json'), 'utf-8')); } catch { return []; }
   })();
+  const pendingCount = queueSnapshot.length;
+
   if (pendingCount > 0) {
-    queueLines.push(`⏳ 재생목록 대기: ${fmtNum(pendingCount)}건 (소진 예상 ${(pendingCount / 190).toFixed(1)}일)`);
+    const yt = require('./lib/youtube_oauth');
+    const today = yt.todayKey();
+    const qs = yt.loadQuotaState();          // ok/fail 이 없으면 0으로 채워져 온다
+    const ok = qs.ok || 0, fail = qs.fail || 0;
+
+    // ── 오늘 쓰기 결과 ──
+    if (ok > 0) {
+      queueLines.push(`✅ 재생목록 추가: ${fmtNum(ok)}건${fail ? ` (실패 ${fmtNum(fail)}건)` : ''}`);
+    } else if (fail > 0) {
+      // 인증은 되는데 쓰기만 전부 실패 — 계정 불일치·권한 문제의 신호
+      queueLines.push(`🛑 오늘 재생목록 추가 전부 실패 (${fmtNum(fail)}건) — OAuth 계정 일치 확인 필요`);
+    } else if (qs.date !== today) {
+      queueLines.push(`🛑 오늘 YouTube 쓰기 시도 없음 — quota_state 마지막 갱신 ${qs.date}`);
+    }
+
+    // ── 잔량 + 오늘 유입 ──
+    //   ts 는 appendPending 이 찍는 UTC ISO 문자열이므로 UTC 날짜로 맞춰 센다.
+    const utcToday = new Date().toISOString().slice(0, 10);
+    const inflow = queueSnapshot.filter(x => String(x.ts || '').slice(0, 10) === utcToday).length;
+    const net = ok - inflow;
+    const eta = net > 0 ? ` · 순감 ${fmtNum(net)}/일 → 약 ${(pendingCount / net).toFixed(1)}일` : '';
+    queueLines.push(`⏳ 재생목록 대기: ${fmtNum(pendingCount)}건 (오늘 유입 +${fmtNum(inflow)}${eta})`);
+    if (net <= 0 && ok > 0) queueLines.push(`⚠️ 유입이 배수보다 많음 — 큐가 줄지 않습니다`);
+
     if (pendingCount >= 1000) queueLines.push(`⚠️ 큐 적체 — 원인 확인 필요`);
-    try {
-      const qs = JSON.parse(fs.readFileSync(path.join(__dirname, '.quota_state.json'), 'utf-8'));
-      const today = require('./lib/youtube_oauth').todayKey();
-      if (qs.date !== today) queueLines.push(`🛑 오늘 YouTube 쓰기 0건 — quota_state 마지막 갱신 ${qs.date}`);
-    } catch {}
   }
 
   const msg = [

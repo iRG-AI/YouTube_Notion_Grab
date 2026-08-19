@@ -791,11 +791,28 @@ bash install-wiki-ingest.sh
       
       <div class="timeline">
         
-        <!-- v2.6 -->
+        <!-- v2.7 -->
         <div class="timeline-item latest">
           <div class="timeline-version">
-            <span>v2.6</span>
+            <span>v2.7</span>
             <span class="v-badge" style="background: linear-gradient(135deg, var(--emerald), var(--indigo));">Active / Latest</span>
+            <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: normal;">— 2026-08-19</span>
+          </div>
+          <div class="timeline-desc">
+            <strong>재생목록 쓰기 성공/실패 계측 및 알림 교정</strong>
+            <ul>
+              <li><strong>"전부 실패한 날"을 감지하지 못하던 구멍 차단</strong>: 큐 적체 경고의 발화 조건이 <code>.quota_state.json</code>의 <code>date !== today</code> 하나뿐이었는데, v2.5에서 실패 요청도 <code>consumeQuota(50)</code>을 타게 되면서 <strong>실패만 해도 <code>date</code>가 당일로 갱신</strong>되어 경고가 무력화되던 문제를 교정. 이 구조 탓에 2026-08-17의 197건 연속 <code>403 playlistItemsNotAccessible</code> 상황에서 원인을 지목하는 경고가 한 건도 발송되지 않았음. quota state에 <code>ok</code>/<code>fail</code> 카운터를 추가하고, <strong>인증은 되는데 쓰기만 전부 실패</strong>하는 계정 불일치 시나리오를 별도 분기로 경고하도록 변경.</li>
+              <li><strong>성공/실패 계측 도입</strong>: <code>lib/youtube_oauth.js</code>의 <code>consumeQuota(units, outcome)</code>로 확장하여 <code>playlistItems.insert</code>의 성공·실패 경로에서 각각 계상. 읽기(<code>list</code>)는 계상 대상에서 제외해 <code>used</code>에만 반영. 기존 상태 파일에 <code>ok</code>/<code>fail</code>이 없으면 0으로 채워 <strong>하위호환을 유지</strong>하며, 날짜 경계에서 <code>used</code>와 함께 리셋됨.</li>
+              <li><strong>알림 문구 3분기 + 순감 기준 소진 예상일</strong>: 텔레그램 완료 요약이 잔량만 표시하고 배수량을 세지 않아 정상 배수(2026-08-18 190건)가 드러나지 않던 문제를 교정. 당일 배수량·유입량을 함께 표기하고, 소진 예상일을 <code>(잔량 ÷ 190)</code>이 아닌 <strong><code>(잔량 ÷ 순감)</code> 기준</strong>으로 계산하도록 변경 — 유입을 무시하던 기존 계산은 실제(약 16.8일)보다 낙관적인 11.8일을 표시했음. 순증 중일 때는 예상일 대신 경고를 표기.</li>
+              <li>임계값(9,500)·소비량(50/1유닛)·일 경계(PT)·대기큐 안전장치는 변경 없음.</li>
+            </ul>
+          </div>
+        </div>
+
+        <!-- v2.6 -->
+        <div class="timeline-item">
+          <div class="timeline-version">
+            <span>v2.6</span>
             <span style="font-size: 0.9rem; color: var(--text-muted); font-weight: normal;">— 2026-08-17</span>
           </div>
           <div class="timeline-desc">
