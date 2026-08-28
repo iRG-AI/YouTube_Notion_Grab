@@ -5,13 +5,14 @@
 #   2. MOC + 키워드 링크 전체 재구성
 # 실행: python3 sync_obsidian.py
 
-import os, re, json, ssl, subprocess, sys, time, unicodedata
+import os, re, json, ssl, shutil, subprocess, sys, time, unicodedata
 from datetime import datetime
 from urllib.request import urlopen, Request
 from collections import defaultdict
 
 VAULT    = '/Users/tycoonan/Documents/Obsidian/AI LLM Wiki/AI LLM Wiki'
 MOC_DIR  = os.path.join(VAULT, '_MOC')
+TRASH_DIR = os.path.join(VAULT, '_trash')
 LOG_FILE = os.path.join(VAULT, 'log.md')
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -110,7 +111,7 @@ def get_existing_vault_info():
     url_to_path = {}
 
     for root, dirs, files in os.walk(VAULT):
-        dirs[:] = [d for d in dirs if not d.startswith('.') and d != '_MOC']
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('_MOC', '_trash')]
         for f in files:
             if not f.endswith('.md'): continue
             fpath = os.path.join(root, f)
@@ -327,6 +328,76 @@ def sync_new_pages(pages=None):
     log(f'\n✅ {added}개 신규 파일 추가 완료\n')
     return added
 
+# ── 고아 파일 격리 (Notion에서 삭제된 페이지의 .md) ──
+def quarantine_orphans(pages, dry_run=False):
+    """
+    Notion 활성 페이지에 없는 notion_id를 가진 .md를 _trash/로 이동. 이동 건수 반환.
+    삭제가 아니라 이동인 이유: Notion API 일시 장애로 페이지 목록이 비면 대량 소실이 되므로
+    되돌릴 수 있어야 한다. 아래 3중 안전장치가 모두 통과할 때만 실행한다.
+    """
+    log('🧹 고아 파일 점검 중 (Notion에서 삭제된 페이지)...')
+    id_to_path, _, _ = get_existing_vault_info()
+
+    # 안전장치 1: Notion 페이지 로드 실패 시 아무것도 하지 않는다
+    if not pages:
+        log('  ⚠️  Notion 페이지 0건 — 고아 정리를 건너뜁니다 (API 오류 의심)\n')
+        return 0
+    # 안전장치 2: 로드된 페이지가 기존 파일의 절반도 안 되면 부분 로드로 간주
+    if len(pages) < len(id_to_path) * 0.5:
+        log(f'  ⚠️  Notion {len(pages)}건 < Vault {len(id_to_path)}건의 50% — 부분 로드 의심, 건너뜁니다\n')
+        return 0
+
+    live_ids = {p['id'] for p in pages}
+
+    def is_video_note(fpath):
+        """영상 노트만 격리 대상. schema.md 등 Vault 시스템 문서 오탐 방지."""
+        relpath = os.path.relpath(fpath, VAULT)
+        if os.path.dirname(relpath) == '':      # 영상 노트는 항상 토픽 폴더 안에 있다
+            return False
+        try:
+            head = nfc(open(fpath, encoding='utf-8', errors='ignore').read(1500))
+        except Exception:
+            return False
+        m = re.search(r'^video_url:\s*(.+)$', head, re.MULTILINE)
+        return bool(m and m.group(1).strip() not in ('', 'null'))
+
+    orphans = [(nid, fp) for nid, fp in id_to_path.items()
+               if nid not in live_ids and is_video_note(fp)]
+
+    if not orphans:
+        log('  ✅ 고아 파일 없음\n')
+        return 0
+
+    # 안전장치 3: 고아 비율이 40%를 넘으면 정상 상황이 아니다
+    ratio = len(orphans) / max(len(id_to_path), 1)
+    if ratio > 0.4:
+        log(f'  🚨 고아가 {len(orphans)}개({ratio:.0%})로 과다 — 안전을 위해 중단합니다. 수동 확인 필요\n')
+        return 0
+
+    log(f'  대상: {len(orphans)}개 ({ratio:.1%})')
+    if dry_run:
+        for nid, fp in orphans[:20]:
+            log(f'    [dry-run] {nfc(os.path.relpath(fp, VAULT))}')
+        if len(orphans) > 20:
+            log(f'    ... 외 {len(orphans) - 20}개')
+        log('  ℹ️  dry-run 모드 — 실제 이동 없음\n')
+        return 0
+
+    stamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    moved = 0
+    for nid, fpath in orphans:
+        try:
+            relpath = os.path.relpath(fpath, VAULT)
+            dest = os.path.join(TRASH_DIR, stamp, relpath)
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            shutil.move(fpath, dest)
+            moved += 1
+        except Exception as e:
+            log(f'  ❌ 이동 실패 {os.path.basename(fpath)}: {e}')
+
+    log(f'  ✅ {moved}개를 _trash/{stamp}/ 로 이동 (내용 보존)\n')
+    return moved
+
 # ── 메인 실행 ──
 if __name__ == '__main__':
     log('🚀 Obsidian 증분 동기화 시작\n')
@@ -342,11 +413,15 @@ if __name__ == '__main__':
     # 1단계: 신규 파일 추가
     added = sync_new_pages(pages)
 
+    # 1.5단계: Notion에서 삭제된 페이지의 고아 .md 격리
+    # (--orphans-dry-run: 대상만 출력하고 이동하지 않음)
+    orphans_removed = quarantine_orphans(pages, dry_run='--orphans-dry-run' in sys.argv)
+
     # 2단계: 신규/갱신이 있거나 강제 재구성 옵션일 때 Wiki 재구성
     force = '--rebuild' in sys.argv
     rebuilt = False
     rebuild_err = ''
-    if added > 0 or tags_updated > 0 or force:
+    if added > 0 or tags_updated > 0 or orphans_removed > 0 or force:
         log('🔧 Wiki 재구성 중 (MOC + 키워드 링크)...')
         build_script = os.path.join(SCRIPT_DIR, 'build_obsidian_wiki.py')
         result = subprocess.run(
@@ -383,7 +458,7 @@ if __name__ == '__main__':
             log('ℹ️  wiki_ingest.py 없음 — 건너뜀')
 
     # 4단계: 검색 인덱스 증분 갱신 (신규/변경이 있을 때만)
-    if added > 0 or tags_updated > 0 or force:
+    if added > 0 or tags_updated > 0 or orphans_removed > 0 or force:
         log('\n🔍 검색 인덱스 갱신 중...')
         idx_script = os.path.join(SCRIPT_DIR, 'build_search_index.py')
         if os.path.exists(idx_script):
@@ -408,6 +483,11 @@ if __name__ == '__main__':
             'Wiki 재구성': '완료' if rebuilt else '생략',
             '소요시간': f'{elapsed}초',
         })
+    if orphans_removed > 0:
+        write_wiki_log('cleanup', f'고아 파일 {orphans_removed}개 격리', {
+            '격리 위치': '_trash/ (내용 보존)',
+            '사유': 'Notion에서 삭제된 페이지의 잔여 .md',
+        })
     if rebuilt:
         write_wiki_log('rebuild', 'MOC + 키워드 링크 재구성', {
             '처리': 'MOC 전체 재생성, 키워드 링크 삽입',
@@ -419,6 +499,7 @@ if __name__ == '__main__':
     print('RESULT_JSON:' + json.dumps({
         'added': added,
         'tags_updated': tags_updated,
+        'orphans_removed': orphans_removed,
         'rebuilt': rebuilt,
         'elapsed': elapsed,
         'error': rebuild_err,

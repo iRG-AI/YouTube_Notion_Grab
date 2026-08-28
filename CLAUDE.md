@@ -109,13 +109,31 @@ YouTube "AI 영상목록" (마스터 모드)
 | `index.html` | 단일 페이지 웹 UI. 재생목록 관리, 마스터 인제스트 트리거, 처리 결과 테이블. |
 | `lib/classifier.js` | Gemini 기반 토픽 분류기. `playlists.json`의 토픽 목록만 허용(allowedSet 필터). 신뢰도 0.6 미만이면 YouTube 추가 건너뜀. |
 | `lib/youtube_oauth.js` | YouTube OAuth2 쓰기 전용. access_token 메모리 캐시(50분), 일일 quota 추적(`.quota_state.json`), 호출 간 200ms rate limit. |
-| `sync_obsidian.py` | Notion DB → Obsidian 증분 동기화. 내부적으로 `wiki_ingest.py`와 연동. |
+| `sync_obsidian.py` | Notion DB → Obsidian 증분 동기화. 내부적으로 `wiki_ingest.py`와 연동. 고아 `.md` 격리 포함(아래 참조). |
 | `wiki_ingest.py` | Karpathy LLM Wiki 파이프라인. Obsidian 노트를 순회하며 Gemini로 개념 단위 지식 추출 및 합성. |
 | `wiki_config.py` | Wiki 인제스트 설정 관리. 230 RPD 토큰 제한, API Rate limit 추적 및 예외 처리 로직 포함. |
 | `build_obsidian_wiki.py` | 키워드별 허브 파일 27개 자동 생성(`_MOC/Claude.md` 등) + MOC 재구성. |
 | `migrate_classify.js` | 기존 영상 일괄 재분류. `.migrate_state.json`으로 재개 가능. |
 | `playlists.json` | 33개 토픽 재생목록 목록. 분류기의 허용 토픽 소스이기도 함. gitignore 대상. |
 | `scripts/clean_pending_queue.js` | (v2.5) 큐 중복 제거 + dead-letter 격리. 기본 dry-run, `--apply` 필요. |
+
+### Obsidian 고아 파일 격리 (`sync_obsidian.py:quarantine_orphans`)
+
+Notion에서 삭제된 페이지의 잔여 `.md`를 **삭제하지 않고** `VAULT/_trash/<타임스탬프>/`로 이동합니다.
+Notion API 일시 장애로 페이지 목록이 비면 대량 소실이 되므로 되돌릴 수 있어야 합니다.
+
+**안전장치 3중 — 하나라도 걸리면 아무것도 하지 않는다. 완화 금지.**
+
+1. Notion 페이지 0건이면 건너뜀 (API 오류 의심)
+2. 로드된 페이지가 Vault 파일의 50% 미만이면 건너뜀 (부분 로드 의심)
+3. 고아 비율이 40%를 넘으면 중단 (수동 확인 필요)
+
+`video_url` 프론트매터가 있고 토픽 폴더 안에 있는 **영상 노트만** 대상입니다.
+`schema.md` 등 Vault 시스템 문서는 오탐하지 않습니다.
+
+- `python3 sync_obsidian.py --orphans-dry-run` — 대상만 출력, 이동 없음
+- 실행 이력은 Obsidian `log.md`의 `cleanup` 항목에 남습니다
+- 2026-08-21 첫 실행에서 435개 격리 (`_trash/20260821_172922/`). **이 폴더는 삭제 금지.**
 
 ### 재생목록 대기 큐 파일 (v2.5)
 
