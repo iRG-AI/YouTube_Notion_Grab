@@ -30,3 +30,6 @@ __pycache__/
 
 # Claude Code 로컬 설정 (개인 환경별 상이)
 .claude/settings.local.json
+
+# Serena MCP 프로젝트 설정 (개인 환경별 상이)
+.serena/
