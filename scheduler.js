@@ -962,17 +962,35 @@ async function processMasterIngest(notionCache) {
             break;
           } catch (clsErr) {
             clsAttempt++;
-            if ((clsErr.message.includes('429') || clsErr.message.includes('Quota') || clsErr.message.includes('quota')) && keysCount > 1) {
-              const currentKey = getActiveGeminiKey();
-              const maskedKey = currentKey ? `${currentKey.slice(0, 8)}...${currentKey.slice(-6)}` : '없음';
-              log(`    ⏳ [분류 Rate Limit] 에러 발생 (Key: ${maskedKey}). API Key 교체 후 재시도... (시도: ${clsAttempt}/${maxClsAttempts})`);
-              rotateGeminiKey();
-              await new Promise(r => setTimeout(r, 1000));
+            const msg = clsErr.message || '';
+            const currentKey = getActiveGeminiKey();
+            const maskedKey = currentKey ? `${currentKey.slice(0, 8)}...${currentKey.slice(-6)}` : '없음';
+
+            // 인증·권한 오류는 재시도하지 않는다 (CLAUDE.md 보안 원칙 1).
+            // 실패를 루프로 난사하면 구글이 어뷰징으로 판단한다.
+            if (/\b(401|403)\b/.test(msg)) throw clsErr;
+
+            // 429/quota — 키를 바꾸면 대개 즉시 통과하므로 짧게 대기
+            const isRateLimit = msg.includes('429') || /quota/i.test(msg);
+            // 5xx·UNAVAILABLE — 모델 과부하 등 일시적 서버 오류.
+            // 요약 경로는 이미 이걸 재시도하는데 분류만 빠져 있었다.
+            const isTransient = /\b(500|502|503|504)\b/.test(msg)
+              || /UNAVAILABLE|overloaded|high demand/i.test(msg);
+
+            if ((isRateLimit || isTransient) && clsAttempt < maxClsAttempts) {
+              // 일시 오류는 지수 백오프 (보안 원칙 2). 상한 15초.
+              const waitMs = isRateLimit ? 1000 : Math.min(2000 * 2 ** (clsAttempt - 1), 15000);
+              log(`    ⏳ [분류 ${isRateLimit ? 'Rate Limit' : '일시 오류'}] ${msg.slice(0, 60)} (Key: ${maskedKey}). ${waitMs / 1000}초 대기 후 재시도... (시도: ${clsAttempt}/${maxClsAttempts})`);
+              if (keysCount > 1) rotateGeminiKey();
+              await new Promise(r => setTimeout(r, waitMs));
               continue;
             }
             throw clsErr;
           }
         }
+        // 재시도를 모두 소진하면 cls 가 undefined 인 채로 루프를 빠져나온다.
+        // 아래 cls.topics 에서 TypeError 로 죽는 것을 막는다.
+        if (!cls) throw new Error(`classifyTopics: 재시도 ${maxClsAttempts}회 소진`);
         const topics = cls.topics;  // 분류된 토픽들
         const allTopics = [...topics];  // 분류 토픽만 (AI 영상목록은 재생목록이지 주제 태그 아님)
 
