@@ -15,6 +15,7 @@ MOC_DIR  = os.path.join(VAULT, '_MOC')
 TRASH_DIR = os.path.join(VAULT, '_trash')
 LOG_FILE = os.path.join(VAULT, 'log.md')
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+TIPS_FOLDER = 'AI 꿀팁'   # v2.8 카톡 링크 노트 폴더. YouTube 로직(고아 격리·tags 동기화)에서 제외된다.
 
 def nfc(s):
     """macOS NFD 파일명을 NFC로 정규화 (한글 깨짐 방지)"""
@@ -70,6 +71,7 @@ def load_env():
 ENV = load_env()
 NOTION_TOKEN = ENV.get('NOTION_TOKEN', '')
 NOTION_DB_ID = ENV.get('NOTION_DB_ID', '')
+NOTION_TIPS_DB_ID = ENV.get('NOTION_TIPS_DB_ID', '')   # v2.8 「AI 꿀팁」. 비어 있으면 꿀팁 동기화 건너뜀
 
 def log(msg): print(msg, flush=True)
 
@@ -111,7 +113,8 @@ def get_existing_vault_info():
     url_to_path = {}
 
     for root, dirs, files in os.walk(VAULT):
-        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('_MOC', '_trash')]
+        # 꿀팁 폴더는 YouTube 영상 로직(고아 격리 분모·tags 동기화)에 섞이지 않게 제외 (v2.8)
+        dirs[:] = [d for d in dirs if not d.startswith('.') and d not in ('_MOC', '_trash') and nfc(d) != TIPS_FOLDER]
         for f in files:
             if not f.endswith('.md'): continue
             fpath = os.path.join(root, f)
@@ -328,6 +331,94 @@ def sync_new_pages(pages=None):
     log(f'\n✅ {added}개 신규 파일 추가 완료\n')
     return added
 
+# ── v2.8: Notion「AI 꿀팁」→ VAULT/AI 꿀팁/*.md (신규만, 평면 폴더) ──
+# 설계 제약 (docs/tasks/2026-09-06-kakao-tips-ingest.md §4-1):
+#   · 프론트매터 키는 link_url — video_url 절대 금지 (고아 격리 오탐 방지)
+#   · 폴더는 TIPS_FOLDER 평면 구조 — wiki_ingest/build_obsidian_wiki 가 최상위 폴더만 순회하므로 하위 폴더 금지
+#   · tags 키를 쓰지 않는다 — build_obsidian_wiki 가 tags 없으면 폴더명으로 MOC 를 만든다 (_MOC/AI 꿀팁.md)
+#   · 카테고리 '모델/LLM' 의 슬래시는 파일명에 못 쓴다 → safe_filename 이 '_' 로 치환
+def sync_tips():
+    if not NOTION_TIPS_DB_ID:
+        log('ℹ️  NOTION_TIPS_DB_ID 없음 — 꿀팁 동기화 건너뜀\n')
+        return 0
+    sys.path.insert(0, os.path.join(SCRIPT_DIR, 'lib'))
+    import tips_notion as tn
+
+    log('🔗 Notion「AI 꿀팁」조회 중...')
+    try:
+        pages = tn.load_all_tips(NOTION_TIPS_DB_ID)
+    except tn.NotionAuthError as e:
+        log(f'🛑 {e} — 꿀팁 동기화 중단'); return 0
+    log(f'  총 {len(pages)}건')
+
+    tips_dir = os.path.join(VAULT, TIPS_FOLDER)
+    os.makedirs(tips_dir, exist_ok=True)
+
+    existing_ids = set()
+    for f in os.listdir(tips_dir):
+        if not f.endswith('.md'): continue
+        try:
+            head = open(os.path.join(tips_dir, f), encoding='utf-8', errors='ignore').read(1500)
+            m = re.search(r'^notion_id:\s*(.+)$', head, re.MULTILINE)
+            if m: existing_ids.add(m.group(1).strip())
+        except Exception:
+            pass
+
+    new_pages = [p for p in pages if p['id'] not in existing_ids]
+    log(f'✨ 신규 꿀팁: {len(new_pages)}개 (기존 {len(existing_ids)}개)\n')
+
+    added = 0
+    for i, page in enumerate(new_pages):
+        try:
+            r = tn.page_to_row(page)
+            date_part = (r['saved_date'][:10].replace('-', '') if r['saved_date'] else '00000000')
+            fname = nfc(safe_filename(f"{date_part}_{r['title']}") + '.md')
+            # 같은 날 같은 추정 제목("노션 자료 (제목 미확인)" 등)이 여럿이면 덮어쓰기 → notion_id 유실 → 매 실행 재생성.
+            # 파일이 이미 있으면(=다른 notion_id) id 끝 6자리를 붙여 유일하게 만든다.
+            # (앞자리는 워크스페이스 공통 접두 '3bca3c…'라 구분이 안 된다)
+            if os.path.exists(os.path.join(tips_dir, fname)):
+                fname = nfc(safe_filename(f"{date_part}_{r['title']}_{page['id'][-6:]}") + '.md')
+            # 본문: Notion 페이지에 사용자가 블록을 붙였으면 포함 (보통 비어 있음)
+            try:
+                body_md = '\n'.join(block_to_md(b) for b in tn.get_blocks(page['id']))
+            except Exception:
+                body_md = ''
+            q = lambda s: (s or '').replace('"', "'")
+            lines = [
+                '---',
+                f'title: "{q(r["title"])}"',
+                f'channel: "{q(r["source"])}"',
+                'source_type: tip',
+                f'category: "{q(r["category"])}"',
+                f'keywords: [{", ".join(chr(34) + q(t) + chr(34) for t in r["tags"])}]',
+                f'importance: {r["importance"] or "null"}',
+                f'status: {r["status"] or "null"}',
+                f'upload_date: {r["saved_date"][:10] if r["saved_date"] else "null"}',
+                f'link_url: {r["url"] or "null"}',
+                f'memo: "{q(r["memo"])}"',
+                f'notion_id: {page["id"]}',
+                '---',
+                '',
+                f'# {r["title"]}',
+                '',
+                f'- 🔗 링크: {r["url"]}',
+                f'- 📂 카테고리: {r["category"]}  ·  중요도: {r["importance"]}  ·  상태: {r["status"]}',
+                f'- 🏷 태그: {", ".join(r["tags"]) if r["tags"] else "(없음)"}',
+                f'- 🗓 저장일: {r["saved_date"]}  ·  출처: {r["source"]}',
+            ]
+            if r['memo']:
+                lines.append(f'- 📝 메모: {r["memo"]}')
+            if body_md.strip():
+                lines += ['', '## 본문', '', body_md]
+            open(os.path.join(tips_dir, fname), 'w', encoding='utf-8').write(nfc('\n'.join(lines)) + '\n')
+            log(f'  [{i+1}/{len(new_pages)}] {TIPS_FOLDER}/{fname}')
+            added += 1
+        except Exception as e:
+            log(f'  ❌ 꿀팁 오류: {e}')
+
+    log(f'\n✅ 꿀팁 {added}개 신규 파일 추가 완료\n')
+    return added
+
 # ── 고아 파일 격리 (Notion에서 삭제된 페이지의 .md) ──
 def quarantine_orphans(pages, dry_run=False):
     """
@@ -417,6 +508,10 @@ if __name__ == '__main__':
     # (--orphans-dry-run: 대상만 출력하고 이동하지 않음)
     orphans_removed = quarantine_orphans(pages, dry_run='--orphans-dry-run' in sys.argv)
 
+    # 1.8단계 (v2.8): 「AI 꿀팁」DB → AI 꿀팁/ 노트 (신규만). 고아 격리 이후에 실행해 격리 분모에 섞이지 않게 한다.
+    tips_added = 0 if '--no-tips' in sys.argv else sync_tips()
+    added += tips_added
+
     # 2단계: 신규/갱신이 있거나 강제 재구성 옵션일 때 Wiki 재구성
     force = '--rebuild' in sys.argv
     rebuilt = False
@@ -478,8 +573,8 @@ if __name__ == '__main__':
             '소요시간': f'{elapsed}초',
         })
     if added > 0:
-        write_wiki_log('ingest', f'신규 영상 {added}개 추가', {
-            '추가된 파일': f'{added}개',
+        write_wiki_log('ingest', f'신규 영상 {added - tips_added}개 · 꿀팁 {tips_added}개 추가', {
+            '추가된 파일': f'{added}개 (영상 {added - tips_added} / 꿀팁 {tips_added})',
             'Wiki 재구성': '완료' if rebuilt else '생략',
             '소요시간': f'{elapsed}초',
         })
@@ -498,6 +593,7 @@ if __name__ == '__main__':
     # 결과를 JSON으로 출력 (scheduler.js에서 파싱)
     print('RESULT_JSON:' + json.dumps({
         'added': added,
+        'tips_added': tips_added,
         'tags_updated': tags_updated,
         'orphans_removed': orphans_removed,
         'rebuilt': rebuilt,

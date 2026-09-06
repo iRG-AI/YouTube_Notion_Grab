@@ -99,6 +99,33 @@ function sendTelegram(message) {
   });
 }
 
+// ── (v3.0) 카카오톡 → Notion「AI 꿀팁」 ──
+// kakao_ingest.py --apply --if-new 실행. 새 CSV 가 없으면 Python 쪽이 즉시 종료한다.
+// 실패해도 reject 하지 않는다 — 카톡 단계가 Obsidian 동기화를 막으면 안 된다.
+function runKakaoIngest(python3) {
+  return new Promise((resolve) => {
+    const { execFile } = require('child_process');
+    const script = path.join(__dirname, 'kakao_ingest.py');
+    if (!fs.existsSync(script)) { log('ℹ️  kakao_ingest.py 없음 — 건너뜀'); return resolve(null); }
+    execFile(python3, [script, '--apply', '--if-new'], { cwd: __dirname, timeout: 10 * 60 * 1000 },
+      (err, stdout, stderr) => {
+        let r = null;
+        const line = String(stdout || '').split('\n').find(l => l.startsWith('RESULT_JSON:'));
+        if (line) { try { r = JSON.parse(line.slice('RESULT_JSON:'.length)); } catch (e) { log(`⚠️ 카톡 결과 파싱 오류: ${e.message}`); } }
+        if (r && r.error === 'auth') {
+          log('🛑 카톡 인제스트: Notion 401/403 — 연쇄 요청 없이 이번 실행은 건너뜀 (토큰·DB 연결 확인 필요)');
+        } else if (err) {
+          log(`⚠️ 카톡 인제스트 오류 (exit ${err.code}): ${String(stderr || '').slice(-300)}`);
+        } else if (r && r.skipped) {
+          log(`ℹ️  카톡 인제스트 건너뜀: ${r.skipped}${r.csv ? ` (${r.csv})` : ''}`);
+        } else if (r) {
+          log(`📎 카톡 인제스트: 신규 ${r.created}건 / 후보 ${r.candidates}건 · DB 총 ${r.db_total}건`);
+        }
+        resolve(r);
+      });
+  });
+}
+
 // ══════════════════════════════════
 // 이메일 알림 전송 (Gmail SMTP over TLS)
 // ══════════════════════════════════
@@ -1414,10 +1441,16 @@ async function main() {
 
   await sendEmail(`[YouTube 요약] 완료 - 저장 ${totalSaved}개`, msg);
 
+  const python3 = '/opt/homebrew/bin/python3';
+
+  // ── (v3.0) 카카오톡 → Notion「AI 꿀팁」 (새 CSV 있을 때만 실제 동작) ──
+  log('\n📎 카톡 → AI 꿀팁 인제스트...');
+  const kakao = await runKakaoIngest(python3);
+  const kakaoCreated = (kakao && kakao.created) || 0;
+
   // ── Obsidian 동기화 (항상 실행 - 노션+Obsidian 결과 합쳐서 1개 메시지 전송) ──
   log('\n🔄 Obsidian 동기화 시작...');
   const { execFile } = require('child_process');
-  const python3 = '/opt/homebrew/bin/python3';
   const syncScript = path.join(__dirname, 'sync_obsidian.py');
   const syncArgs = totalSaved > 0 ? [syncScript] : [syncScript, '--rebuild'];
   execFile(python3, syncArgs, { cwd: __dirname }, async (err, stdout, stderr) => {
@@ -1432,18 +1465,28 @@ async function main() {
     if (jsonLine) {
       try {
         const r = JSON.parse(jsonLine.replace('RESULT_JSON:', ''));
+        const tipsAdded = r.tips_added || 0;
+        const kakaoSection = kakaoCreated > 0 ? [
+          ``,
+          `━━━━━━━━━━━━━━━━━━━━━━`,
+          `📎 카톡 → AI 꿀팁`,
+          `  • Notion 신규: ${kakaoCreated}건 (DB 총 ${kakao.db_total}건)`,
+          ...(Array.isArray(kakao.titles) ? kakao.titles.slice(0, 5).map(t => `    - ${t}`) : []),
+        ] : [];
         const obsSection = [
+          ...kakaoSection,
           ``,
           `━━━━━━━━━━━━━━━━━━━━━━`,
           `📓 Obsidian AI LLM Wiki`,
-          `  • 신규 추가: ${r.added}개`,
+          `  • 신규 영상 노트: ${r.added - tipsAdded}개`,
+          ...(tipsAdded > 0 ? [`  • 신규 꿀팁 노트: ${tipsAdded}개`] : []),
           ...(r.tags_updated > 0 ? [`  • tags 갱신: ${r.tags_updated}개`] : []),
           `  • Wiki 재구성: ${r.rebuilt ? '✅ 완료' : '⏭ 생략'}`,
           `  • 소요시간: ${r.elapsed}초`,
         ].join('\n');
-        log(`✅ Obsidian 동기화 완료! 추가: ${r.added}개`);
+        log(`✅ Obsidian 동기화 완료! 추가: ${r.added}개 (꿀팁 ${tipsAdded})`);
 
-        const hasNewOrUpdated = totalSaved > 0 || (r.added && r.added > 0) || (r.tags_updated && r.tags_updated > 0);
+        const hasNewOrUpdated = totalSaved > 0 || kakaoCreated > 0 || (r.added && r.added > 0) || (r.tags_updated && r.tags_updated > 0);
         if (hasNewOrUpdated) {
           await sendTelegram(msg + obsSection);
         } else {

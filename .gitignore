@@ -23,6 +23,7 @@ migration_preview.csv
 pending_playlist_adds*
 .wiki_quota.json
 .wiki_state.json
+.kakao_state.json
 
 # Python 캐시
 __pycache__/
@@ -33,3 +34,6 @@ __pycache__/
 
 # Serena MCP 프로젝트 설정 (개인 환경별 상이)
 .serena/
+
+# 카카오톡 대화 내보내기 (개인 대화 — 레포에 절대 포함 금지, v2.8)
+KakaoTalk_Chat_*

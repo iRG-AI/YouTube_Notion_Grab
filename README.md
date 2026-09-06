@@ -1,7 +1,11 @@
-# 🎬 YouTube → Notion AI 요약기 + Obsidian LLM Wiki
+# 🎬 YouTube + 📎 카카오톡 → Notion → Obsidian LLM Wiki
 
-YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하여 **Notion DB**에 저장하고,  
-**Obsidian**으로 자동 동기화하여 **LLM Wiki** 지식베이스를 구축하는 풀스택 자동화 솔루션입니다.
+**현재 버전: v3.0** (2026-09-06)
+
+YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하고, 카카오톡 '나와의 채팅'에 저장해 둔 **AI 자료 링크**를 자동 수집하여
+각각 **Notion DB**(영상 DB ·「AI 꿀팁」DB)에 적재한 뒤, **Obsidian**으로 동기화해 하나의 **LLM Wiki** 지식베이스로 합성하는 자동화 파이프라인입니다.
+
+> v3.0부터 지식 소스가 **YouTube 영상 + 카카오톡 링크** 두 갈래가 되었습니다. Notion 이후 단계(Obsidian 노트 → Wiki 합성 → MOC)는 두 소스가 완전히 공유합니다.
 
 ---
 
@@ -20,62 +24,106 @@ YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하여 **Notion 
 - 📝 **Notion DB 자동 저장** — 요약 결과를 Notion 데이터베이스에 구조화하여 저장
 - 🔄 **스마트 중복 방지** — Notion 전체 캐시 로드 후 메모리에서 즉시 중복 체크
 - 📊 **통계 자동 업데이트** — 조회수·구독자수 15% 이상 변화 시만 Notion API 호출
-- 📓 **Obsidian 자동 동기화** — 신규 저장 완료 시 Obsidian LLM Wiki 자동 업데이트
+- 📎 **카카오톡 링크 자동 수집 (v3.0)** — '나와의 채팅' 내보내기 CSV에서 AI 자료 링크를 추출·정규화해 Notion「AI 꿀팁」DB에 신규만 적재 (DB 대조 기반 멱등성)
+- 📓 **Obsidian 자동 동기화** — 영상 DB +「AI 꿀팁」DB 신규 항목을 Obsidian 노트로 생성, LLM Wiki 자동 합성
 - 🔗 **Wiki 링크 자동 구성** — 재생목록별 MOC, 채널별 목차, 키워드 링크 자동 생성
 - 📱 **텔레그램 알림** — 노션 저장 결과 + Obsidian 동기화 결과 통합 전송
 - ⏰ **launchd 자동 스케줄링** — Mac 로그인 시 서버 자동 시작, 6시간 간격 스케줄러 실행
 
 ---
 
-## 🏗️ 시스템 아키텍처
+## 🏗️ 시스템 아키텍처 (v3.0)
+
+### 전체 데이터 흐름
 
 ```mermaid
 flowchart TD
-    USER["👤 사용자\n'AI 영상목록' 재생목록에 영상 추가"]
-    MASTER[("📺 YouTube AI 영상목록")]
-    USER -->|영상 추가| MASTER
+    subgraph SRC["🧑 지식 소스 (사용자 행동)"]
+        U1["'AI 영상목록' 재생목록에\n영상 추가"]
+        U2["카카오톡 '나와의 채팅'에\nAI 자료 링크 저장"]
+        U2 -.->|"월 1회 수동\n대화 내보내기"| CSV[("~/Downloads/\nKakaoTalk_Chat_안진훈_*.csv")]
+        U1 --> MASTER[("📺 YouTube\nAI 영상목록")]
+    end
 
     subgraph TRIGGER["⏰ 실행 트리거"]
-        SCHED["launchd 스케줄러\n6시간 간격 (YouTube 인제스트)"]
-        WEBUI["웹 UI 버튼\nlocalhost:3000"]
-        WIKI_SCHED["launchd 스케줄러\n매일 03:00 (Wiki 전체 재분석)"]
+        SCHED["launchd · com.irichgreen.ytsummarizer\n00 / 06 / 12 / 18시 → scheduler.js"]
+        WEBUI["웹 UI localhost:3000\nserver.js (SSE)"]
+        WIKI_SCHED["launchd · com.irichgreen.wiki-ingest\n매일 03:00 → wiki_ingest.py --full"]
     end
 
     SCHED --> ENTRY
     WEBUI -->|SSE| ENTRY
-    MASTER -->|Data API v3| FETCH
 
-    subgraph PIPELINE["🤖 마스터 인제스트 파이프라인 (scheduler.js)"]
+    subgraph YT["🎬 ① YouTube 인제스트 (scheduler.js, Node)"]
         ENTRY["processMasterIngest()"]
-        FETCH["영상 메타 조회\n+ Notion 캐시 로드 · 중복 체크"]
-        GEMINI["lib/classifier.js\nGemini 2.5 Flash\n요약 + 토픽 1~5개 분류"]
-        NSAVE["saveToNotionWithTopics()\n— 영상별 in-loop —"]
-        YSAVE["lib/youtube_oauth.js\nplaylistItems.insert\n— 영상별 in-loop —"]
+        FETCH["영상 메타 조회 (Data API v3)\n+ Notion 캐시 · 중복 체크"]
+        GEMINI["lib/classifier.js\nGemini 2.5 Flash · thinkingBudget 0\n4섹션 요약 + 토픽 1~5개"]
+        NSAVE["saveToNotionWithTopics()"]
+        YSAVE["lib/youtube_oauth.js\nplaylistItems.insert (50유닛)"]
         ENTRY --> FETCH --> GEMINI --> NSAVE --> YSAVE
     end
+    MASTER -->|Data API v3| FETCH
 
-    NSAVE --> NOTION[("📋 Notion DB\n다중 주제 태그 + 4섹션 요약")]
-    YSAVE -->|"quota 여유"| YT_PL[("📺 YouTube 토픽 재생목록\n33개")]
-    YSAVE -->|"quota 초과"| PENDING[("⏳ pending_playlist_adds.json")]
-    PENDING -->|"다음 실행 시 자동 소진"| YT_PL
-
-    NOTION -->|"모든 영상 처리 완료 후 1회"| SYNC
-    WIKI_SCHED -->|"일일 230 API 제한 준수"| WIKI_INGEST
-
-    subgraph OBS["📓 Obsidian Karpathy LLM Wiki"]
-        SYNC["sync_obsidian.py\n신규 영상 .md 생성 + tags 갱신"]
-        WIKI_INGEST["wiki_ingest.py\nGemini 2.5 Flash\n개념/엔티티 Wiki 페이지 합성"]
-        BUILD["build_obsidian_wiki.py\nMOC + 키워드 허브 27개 자동 생성"]
-        VAULT[("📁 Obsidian Vault\nAI LLM Wiki/")]
-        
-        SYNC --> WIKI_INGEST
-        WIKI_INGEST --> BUILD
-        BUILD --> VAULT
+    subgraph KK["📎 ② 카카오톡 인제스트 (kakao_ingest.py, Python) — v3.0"]
+        KFIND["최신 CSV 탐지\n.kakao_state.json (mtime) 으로\n이미 본 CSV 는 즉시 종료"]
+        KPARSE["lib/kakao_parse.py\nURL 추출 · 트래킹 파라미터 제거\n· 정규화 키 · 제목/카테고리 추정"]
+        KDEDUP["lib/tips_notion.py\n「AI 꿀팁」DB 전량 조회\nURL 키 대조 → 신규만"]
+        KPUSH["POST /v1/pages\n350ms 간격 · 401/403 즉시 종료"]
+        KFIND --> KPARSE --> KDEDUP --> KPUSH
     end
+    CSV --> KFIND
+    SCHED -->|"YouTube 완료 후\n--apply --if-new"| KFIND
 
-    VAULT --> TG["📱 Telegram 통합 알림\nNotion 결과 + Obsidian 결과"]
+    NSAVE --> NOTION_V[("📋 Notion 영상 DB\nNOTION_DB_ID")]
+    KPUSH --> NOTION_T[("📋 Notion「AI 꿀팁」DB\nNOTION_TIPS_DB_ID")]
+    YSAVE -->|"quota 여유"| YT_PL[("📺 YouTube 토픽 재생목록 33개")]
+    YSAVE -->|"quota 초과·실패"| PENDING[("⏳ pending_playlist_adds.json\n(dead-letter 격리 · 연속실패 10회 차단)")]
+    PENDING -->|"다음 실행 시 소진"| YT_PL
+
+    subgraph OBS["📓 ③ Obsidian LLM Wiki (Python, 두 소스 공유)"]
+        SYNC["sync_obsidian.py"]
+        SYNC_V["sync_new_pages()\n영상 노트 → <토픽>/*.md\nvideo_url · tags"]
+        SYNC_T["sync_tips() — v3.0\n꿀팁 노트 → AI 꿀팁/*.md\nlink_url · keywords · category"]
+        ORPHAN["quarantine_orphans()\n영상 노트만 · 3중 안전장치\n→ _trash/"]
+        WIKI_INGEST["wiki_ingest.py\nGemini · 엔티티/개념 추출\n(230 RPD 상한)"]
+        BUILD["build_obsidian_wiki.py\nMOC 재구성 · 키워드 허브 27개\n_MOC/AI 꿀팁 MOC.md 포함"]
+        VAULT[("📁 Obsidian Vault\nAI LLM Wiki/")]
+        SYNC --> SYNC_V --> ORPHAN --> SYNC_T --> BUILD --> WIKI_INGEST --> VAULT
+    end
+    NOTION_V -->|"영상 처리 완료 후 1회"| SYNC
+    NOTION_T --> SYNC_T
+    WIKI_SCHED --> WIKI_INGEST
+
+    VAULT --> TG["📱 Telegram 통합 알림 (1개 메시지)\nYouTube 결과 + 꿀팁 신규 + Obsidian 결과"]
     YT_PL --> TG
 ```
+
+### 한 사이클(6시간)에서 실제로 일어나는 일
+
+| 순서 | 단계 | 실행 주체 | 입력 | 출력 | 아무 것도 없을 때 |
+|:--:|---|---|---|---|---|
+| 1 | YouTube 마스터 인제스트 | `scheduler.js` | 'AI 영상목록' 신규 영상 | Notion 영상 DB 행 + 토픽 재생목록 추가 | Notion 캐시 대조 후 0건 처리 |
+| 2 | 대기 큐 소진 | `scheduler.js:flushPendingQueue()` | `pending_playlist_adds.json` | 재생목록 추가 (quota 한도 내) | 큐 비어 있으면 생략 |
+| 3 | 카톡 인제스트 (v3.0) | `kakao_ingest.py --apply --if-new` | `~/Downloads` 최신 CSV | Notion「AI 꿀팁」신규 행 | 같은 CSV(mtime)면 Notion 조회 없이 즉시 종료 |
+| 4 | 영상 노트 동기화 | `sync_obsidian.py:sync_new_pages()` | Notion 영상 DB | `VAULT/<토픽>/*.md` | 0건 |
+| 5 | 고아 격리 | `sync_obsidian.py:quarantine_orphans()` | Vault 영상 노트 vs Notion | `_trash/<ts>/` 이동 | 3중 안전장치 하나라도 걸리면 아무것도 안 함 |
+| 6 | 꿀팁 노트 동기화 (v3.0) | `sync_obsidian.py:sync_tips()` | Notion「AI 꿀팁」DB | `VAULT/AI 꿀팁/*.md` | 0건 |
+| 7 | MOC·키워드 재구성 | `build_obsidian_wiki.py` | Vault 전체 | `_MOC/*.md`, 노트 하단 관련 항목 | 4·5·6이 전부 0건이면 생략 |
+| 8 | Wiki 합성 | `wiki_ingest.py` | 미처리 노트 | `wiki/entities`, `wiki/concepts` | 신규 노트 없으면 생략 |
+| 9 | 알림 | `scheduler.js` | 1·3·4~8 결과 | Telegram 1개 메시지 | 변경 0이면 발송 생략 |
+
+### 두 소스의 격리 원칙
+
+영상 노트와 꿀팁 노트는 **같은 Vault, 다른 폴더, 다른 프론트매터 키**를 쓴다. 이 구분이 고아 격리 안전장치를 지킨다.
+
+| | 영상 노트 | 꿀팁 노트 (v3.0) |
+|---|---|---|
+| 폴더 | `<토픽명>/` (33개) | `AI 꿀팁/` (평면, 하위 폴더 없음) |
+| 원본 링크 키 | `video_url` | `link_url` — **`video_url` 절대 금지** |
+| 분류 키 | `tags: [..]` (Notion 주제와 동기화) | `keywords: [..]` + `category` — `tags` 없음 → 폴더명 MOC |
+| 고아 격리 대상 | ✅ | ❌ (`get_existing_vault_info()`가 폴더를 걷지 않음) |
+| 파일명 | `<채널>_<제목>_<날짜>.md` | `<저장일>_<제목>.md` (충돌 시 `_<id 끝 6자리>`) |
+| Wiki 합성 | ✅ 본문 요약 기반 | ✅ 제목·태그·메모 기반 (본문이 거의 없어 추출 품질은 낮음) |
 
 ---
 
@@ -93,7 +141,8 @@ Youtube_Notion_Grap/
 ├── migrate_classify.js                # 기존 영상 일괄 재분류 스크립트 (v102)
 ├── oauth_setup.js                     # YouTube OAuth refresh_token 1회 발급 도구 (v102)
 ├── notion_to_obsidian.js              # Notion → Obsidian 일회성 마이그레이션
-├── sync_obsidian.py                   # Obsidian 증분 동기화 (신규 영상 추가 및 위키 인제스트 연동)
+├── kakao_ingest.py                    # (v3.0) 카톡 CSV → Notion「AI 꿀팁」 (기본 dry-run, --apply / --if-new)
+├── sync_obsidian.py                   # Obsidian 증분 동기화 (영상 노트 + 꿀팁 노트, 고아 격리, 위키 인제스트 연동)
 ├── wiki_ingest.py                     # Gemini 기반 엔티티/개념 위키 페이지 합성 스크립트 (v111)
 ├── wiki_config.py                     # Wiki Ingest 공통 설정 및 API 호출 유틸 (v111)
 ├── build_obsidian_wiki.py             # MOC + 채널 목차 + 키워드 링크 빌더
@@ -106,8 +155,14 @@ Youtube_Notion_Grap/
 ├── install-wiki-ingest.sh             # 일일 Wiki 인제스트 스케줄러 설치 스크립트 (v111)
 ├── lib/
 │   ├── youtube_oauth.js               # YouTube OAuth 2.0 + playlistItems.insert (v102)
-│   └── classifier.js                  # Gemini 기반 토픽 분류기 (v102)
-└── README.md
+│   ├── classifier.js                  # Gemini 기반 토픽 분류기 (v102)
+│   ├── kakao_parse.py                 # (v3.0) URL 추출·정규화·중복 키·제목/카테고리 추정 (순수 함수)
+│   └── tips_notion.py                 # (v3.0) 「AI 꿀팁」DB 조회/생성 래퍼 (속성 타입 표 고정)
+├── scripts/
+│   └── clean_pending_queue.js         # (v2.5) 대기 큐 중복 제거 + dead-letter 격리
+├── docs/tasks/                        # Cowork → Claude Code 작업지시서 (날짜-슬러그.md)
+├── CLAUDE.md                          # 구조·제약·안전장치 — 코드 질문은 여기부터
+└── README.md                          # 이 문서 (v3.0부터 README.html 은 만들지 않는다)
 ```
 
 ---
@@ -136,7 +191,11 @@ Youtube_Notion_Grap/
 YOUTUBE_API_KEY=AIzaSy...
 GEMINI_API_KEY=AIzaSy...
 NOTION_TOKEN=ntn_...
-NOTION_DB_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+NOTION_DB_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx        # YouTube 영상 DB
+
+# (v3.0) 카카오톡 →「AI 꿀팁」 — NOTION_DB_ID 와 반드시 다른 변수명. 섞으면 영상 파이프라인이 엉뚱한 DB에 쓴다
+NOTION_TIPS_DB_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx   # 「AI 꿀팁」DB (같은 NOTION_TOKEN 통합에 연결 필요)
+KAKAO_EXPORT_DIR=/Users/<사용자>/Downloads          # KakaoTalk_Chat_안진훈_*.csv 가 떨어지는 폴더
 
 TELEGRAM_ENABLED=true
 TELEGRAM_BOT_TOKEN=1234567890:AAG...
@@ -175,6 +234,19 @@ bash install-server.sh
 bash install-scheduler.sh
 ```
 
+### 3. 카카오톡 링크 인제스트 (v3.0)
+
+```bash
+# 카카오톡 PC → '나와의 채팅' → 대화 내보내기 → ~/Downloads 에 CSV 저장 (월 1회 정도)
+# 이후는 스케줄러가 자동 처리한다. 수동으로 돌릴 때는 반드시 dry-run 부터.
+/usr/bin/python3 kakao_ingest.py                    # dry-run — 생성될 행을 표로만 출력
+/usr/bin/python3 kakao_ingest.py --apply --limit=3  # 3건만 생성 → Notion 육안 확인
+/usr/bin/python3 kakao_ingest.py --apply            # 전량
+/usr/bin/python3 lib/tips_notion.py                 # 「AI 꿀팁」DB 상태 (건수·카테고리 분포)
+```
+
+> 인터프리터는 `/usr/bin/python3` 또는 `/opt/homebrew/bin/python3`. PATH 의 `python3`(python.org 3.11)는 루트 인증서가 없어 Notion 호출이 SSL 오류로 죽는다.
+
 ---
 
 ## 📓 Obsidian LLM Wiki
@@ -198,6 +270,22 @@ bash install-scheduler.sh
 | 처리 상태 | Select | 완료 / 오류 |
 | 주제 | Multi-Select | 재생목록명 (NFC 정규화 적용) |
 
+### 「AI 꿀팁」DB (v3.0) — `NOTION_TIPS_DB_ID`
+
+속성 타입은 `lib/tips_notion.py` 상단 주석이 원본이다. 추측해서 쓰면 400이 난다.
+
+| 컬럼명 | 타입 | 값 · 비고 |
+|--------|------|------|
+| 제목 | Title | 규칙 기반 추정 (`<레포명> (GitHub 레포)`, `노션 자료 (…)`). 슬러그에 한글이 없으면 `(제목 미확인)` |
+| URL | URL | 트래킹 파라미터(`utm_*`, `fbclid`, `pvs`, `source`…)를 제거한 원본 링크 |
+| 출처 | URL | **호스트만** 저장 (`github.com`, `xxx.notion.site`) |
+| 태그 | Rich Text | 쉼표 결합 문자열 (`ClaudeCode,GitHub`) — multi_select 가 아니다 |
+| 카테고리 | Select | 프롬프트 / 개발툴 / 기타 / 모델/LLM / 뉴스/트렌드 / 지식관리 / 사업/마케팅 |
+| 상태 | Select | 미확인 (생성 시 기본값) |
+| 중요도 | Select | 상 / 중 / 하 (생성 시 기본 `중`) |
+| 저장일 | Date | 카톡 메시지 날짜 |
+| 메모 | Rich Text | `원문 확인 필요` 등 추정 근거 |
+
 ---
 
 ## 🔄 버전 관리 (Version History)
@@ -210,6 +298,7 @@ bash install-scheduler.sh
 
 | 버전 | 날짜 | 주요 내용 요약 |
 | :-- | :--- | :--- |
+| **v3.0** | 2026-09-06 | **지식 소스 2원화 — 카카오톡 링크 파이프라인 통합**: 카카오톡 '나와의 채팅' CSV → Notion「AI 꿀팁」DB → Obsidian `AI 꿀팁/` 노트 → 기존 Wiki 합성·MOC 를 그대로 공유. `kakao_ingest.py`·`lib/kakao_parse.py`·`lib/tips_notion.py` 신규, `sync_obsidian.py:sync_tips()`, `scheduler.js` 훅(`--apply --if-new`), 텔레그램 통합 알림. 영상 노트와 꿀팁 노트의 격리 원칙 확립. `README.html` 폐지 |
 | **v2.7.1** | 2026-08-28 | **토픽 분류의 일시적 서버 오류(5xx) 재시도 추가**: 요약 경로는 503에 키 로테이션 + 재시도로 대응하는 반면 분류 경로는 429/quota만 재시도 대상이라 503 한 번에 영상이 떨어지던 비대칭을 교정하고, 재시도 소진 시 발생하던 잠복 TypeError 경로를 차단 |
 | **v2.7** | 2026-08-19 | **재생목록 쓰기 성공/실패 계측 및 알림 교정**: `.quota_state.json`이 성공·실패를 구분하지 않아 "시도했으나 전부 실패한 날"을 감지하지 못하던 구멍을 막고, 텔레그램 알림에 당일 배수량·유입량·순감 기준 소진 예상일을 표기 |
 | **v2.6** | 2026-08-17 | **quota 일 경계 태평양시(PT) 교정**: `.quota_state.json`의 날짜 키가 UTC라 KST 09:00에 리셋되는 반면 YouTube 실제 quota는 PT 자정(KST 16:00)에 리셋되어, 그 7시간 동안 스로틀이 무력화되던 문제를 교정 |
@@ -226,6 +315,35 @@ bash install-scheduler.sh
 ---
 
 ### 📝 상세 변경 내역 (Detailed Change Log)
+
+#### [v3.0] — 2026-09-06 (📎 지식 소스 2원화 — 카카오톡 링크 파이프라인 통합)
+
+**왜 메이저 버전인가.** v1~v2 는 "YouTube 영상 → Notion → Obsidian" 한 줄 파이프라인의 안정화·최적화였다. v3.0 은 **두 번째 지식 소스(카카오톡에 저장한 AI 자료 링크)를 같은 Obsidian LLM Wiki 로 합류**시키는 아키텍처 확장이다. Notion 이전 단계는 소스별로 분리되고, Notion 이후 단계(노트 생성 → Wiki 합성 → MOC → 알림)는 공유한다. 합성 로직을 두 벌 만들지 않는 것이 핵심 설계 판단이다.
+
+**① 카카오톡 → Notion「AI 꿀팁」 (신규 Python 모듈 3개)**
+- `lib/kakao_parse.py` — CSV(`Date,User,Message`, UTF-8 BOM) 파싱, URL 추출, **트래킹 파라미터 제거**(`fbclid utm_* pvs si mcp_token _phid _phsrc source shareKey navType pli usp gclid igshid`), 중복 판정 키(`https` 통일·소문자 호스트·`www.` 제거·끝 슬래시 제거·fragment 제거), 규칙 기반 제목/카테고리/태그 추정. 순수 함수, 네트워크 없음.
+- `lib/tips_notion.py` — 「AI 꿀팁」DB 조회/생성 래퍼. **속성 타입 표를 주석에 고정**(`태그`=rich_text 쉼표 결합, `출처`=url 타입이지만 호스트만). 401/403 → `NotionAuthError` 로 즉시 종료(보안 원칙 1), 429/5xx → 지수 백오프 2·4·8·16초(원칙 2), 생성 간 350ms(3 req/s).
+- `kakao_ingest.py` — 진입점. **기본 dry-run**, `--apply` 로만 생성. `--since` 기본 `2026-03-01`(DB 시작일 — 그 이전 카톡 링크 103건은 쇼핑·개인 링크). **중복 판정은 상태 파일이 아니라 DB 전량 조회 + URL 키 대조** — 같은 CSV 를 몇 번 돌려도 0건이어야 정상이며, 2026-09-06 CSV 병합 2회 실행으로 15건이 중복 생성된 사고의 재발 방지 조건이다. `--if-new` 는 `.kakao_state.json`(최신 CSV 의 mtime)을 보고 이미 본 CSV 면 Notion 조회 없이 즉시 종료하는 **스킵 최적화일 뿐 중복 방지 장치가 아니다.** 마지막 줄 `RESULT_JSON:{csv,created,candidates,db_total,titles}` 를 스케줄러가 파싱.
+- 검증: 기존 CSV 재실행 0건(멱등성), 2회 연속 실행 0건, `?source=copy_link`·끝 슬래시·`www.` 차이가 같은 키로 판정, 테스트 행 1건 생성→재조회→아카이브로 생성 경로 확인, `/opt/homebrew/bin/python3`(3.14)·`/usr/bin/python3`(3.9) 양쪽 SSL 동작 확인.
+
+**② Notion「AI 꿀팁」→ Obsidian (`sync_obsidian.py:sync_tips()`)**
+- `VAULT/AI 꿀팁/` **평면 폴더**에 `<저장일>_<제목>.md` 생성(신규만). 같은 날 같은 추정 제목이 여럿이면 `_<notion_id 끝 6자리>` 를 붙인다 — 덮어쓰기로 `notion_id` 가 유실되면 매 실행 재생성되기 때문. 앞 6자리는 워크스페이스 공통 접두(`3bca3c…`)라 구분이 안 된다.
+- 프론트매터는 `link_url`·`keywords`·`category`·`importance`·`status`·`channel`(=출처 호스트)·`upload_date`(=저장일)·`notion_id`. **`video_url` 과 `tags` 를 쓰지 않는다.** `video_url` 을 쓰면 고아 격리 대상이 되고, `tags` 가 없어야 `build_obsidian_wiki` 가 폴더명 MOC(`_MOC/AI 꿀팁 MOC.md`)로 묶는다.
+- **YouTube 로직과의 격리**: `get_existing_vault_info()` 가 `AI 꿀팁/` 를 걷지 않으므로 고아 격리의 분모(안전장치 2 — Notion 건수 < Vault 50%)와 `sync_existing_tags()` 에 섞이지 않는다. `--orphans-dry-run` 으로 확인 — 꿀팁 99개 존재 상태에서 notion_id 등록 파일 2,542개(기준선과 동일)·고아 0.
+- `--no-tips` 옵션, `RESULT_JSON.tips_added` 추가. 실행 순서는 영상 노트 → 고아 격리 → **꿀팁 노트** → MOC → Wiki 합성.
+- 첫 적재 99건. 꿀팁 노트는 본문이 거의 없어(제목·링크·태그·메모) `wiki_ingest` 추출 품질이 낮다. URL 본문을 긁어 Gemini 로 요약하는 2차 확장은 미구현(선택).
+
+**③ 스케줄러 통합 (`scheduler.js`, 지시서 `docs/tasks/2026-09-06-scheduler-kakao-hook.md`)**
+- YouTube 인제스트 완료 → `kakao_ingest.py --apply --if-new` → `sync_obsidian.py` 순서. 카톡 단계는 절대 reject 하지 않아 Obsidian 동기화를 막지 않는다. Notion 401/403 이면 로그만 남기고 다음 단계로.
+- 텔레그램은 기존 1개 메시지에 `📎 카톡 → AI 꿀팁` 섹션과 `신규 꿀팁 노트 N개` 를 추가. 메시지를 2개로 나누지 않는다.
+
+**④ 운영·문서**
+- `.env` 에 `NOTION_TIPS_DB_ID`·`KAKAO_EXPORT_DIR`. `NOTION_DB_ID`(영상용)와 다른 변수명이다.
+- `.gitignore` 에 `.kakao_state.json`, `KakaoTalk_Chat_*`(개인 대화 — 레포에 절대 포함 금지).
+- **`README.html` 폐지.** 앞으로 `README.md` 만 갱신한다(CLAUDE.md 산출물 규칙 갱신).
+- 발견한 사실: PATH 의 `python3`(python.org 3.11)는 루트 인증서가 없어 Notion 호출이 `CERTIFICATE_VERIFY_FAILED` 로 죽는다. 데몬이 쓰는 `/usr/bin/python3`·`/opt/homebrew/bin/python3` 는 정상.
+- 첫 적재 중 사고 1건: `--orphans-dry-run` 검증 실행이 꿀팁 5건을 신규로 잡으면서 `wiki_ingest.py` 를 **제한 없이** 띄웠다(기존 동작). 25건 호출 후 수동 중단, 상태 손실 없음. 대량 적재 시 `sync_tips()` 단독 → `wiki_ingest.py --limit=20` 분할 규칙을 CLAUDE.md 에 남겼다.
+- 변경 없음: YouTube 인제스트·quota·대기 큐·OAuth·고아 격리 안전장치·Wiki 합성 로직.
 
 #### [v2.7.1] — 2026-08-28 (🔁 토픽 분류의 일시적 서버 오류(5xx) 재시도 추가)
 - **503 한 번에 영상이 떨어지던 비대칭 교정**: 요약 단계는 8회 재시도 + API Key 로테이션으로 `503 UNAVAILABLE`을 흡수하는데, 분류 단계(`classifyTopics`)의 재시도 조건은 **429/quota만** 포함해 그 외 오류는 즉시 `throw`되었음. 2026-08-28 06:00 실행에서 동일한 503으로 요약은 통과하고 분류만 실패(`classifyTopics failed after 1 attempts`)해 영상 1건이 6시간 뒤 실행으로 밀려남. `5xx`·`UNAVAILABLE`·`overloaded`·`high demand`를 재시도 대상에 추가함.
