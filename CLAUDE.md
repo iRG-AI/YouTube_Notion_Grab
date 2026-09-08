@@ -285,11 +285,13 @@ GCP       : youtube-data-api-487306, 게시 상태 = 프로덕션
 - `README.md` 버전 이력은 요약 표 1행 + 상세 변경 내역 1절을 함께 쓴다. 메이저는 아키텍처 확장(소스·저장소·합성 엔진 추가), 마이너는 기능·안정성.
 - `CLAUDE.md`는 구조·제약이 바뀔 때 갱신하고 하단 이력에 날짜와 함께 남긴다.
 - `AGENTS.md`는 **git 추적 대상**이다(2026-09-08~). `CLAUDE.md`와 함께 갱신하고, 두 문서가 어긋나면 **`CLAUDE.md`가 이긴다**.
+- 문서에 **개인 절대경로를 새로 쓰지 않는다**(2026-09-09~). 앞으로 추가·수정하는 줄은 `<REPO_ROOT>/...` 또는 `~/...` 표기를 쓴다. 기존 표기는 소급 정리하지 않는다.
 - Cowork → Claude Code 핸드오프는 `docs/tasks/YYYY-MM-DD-<슬러그>.md` 작업지시서로 한다.
 - `git push`는 사용자 확인 후.
 
 ## 변경 이력
 
+- **2026-09-09 (문서)** — 규약 1줄: 문서에 개인 절대경로를 새로 쓰지 않는다(`<REPO_ROOT>`·`~` 표기). 기존 8곳(CLAUDE.md 3 · AGENTS.md 5)은 09-06 push 분이 이미 공개라 소급 정리하지 않는다(사용자 판정).
 - **2026-09-08 (문서)** — `AGENTS.md` git 추적 시작(420줄, 그동안 untracked). 추적 밖이라 diff·리뷰에 안 잡혀 `AGENTS.md:409`가 "README.md + README.html 양쪽 동시 갱신"으로 남아 `CLAUDE.md:284`(v3.0 폐지)와 어긋나 있었다 — 금지 문구로 교체하고 추적 규약을 산출물 규칙에 추가. 코드 무변경.
 - **2026-09-06 (v3.0)** — 메이저 승격: 지식 소스 2원화(YouTube + 카카오톡). `kakao_ingest.py`에 `--if-new`·`.kakao_state.json`·`RESULT_JSON`·`KakaoTalk_Chat_안진훈_` 접두 필터(NFC) 추가. `scheduler.js` 훅 지시서 `docs/tasks/2026-09-06-scheduler-kakao-hook.md`. 생성 경로 검증(테스트 행 생성→아카이브). **`README.html` 삭제·폐지 — 앞으로 만들지 않는다.** README.md v3.0 상세 이력·데이터 흐름도.
 - **2026-09-06 (v2.8, 같은 날 v3.0에 흡수)** — 카카오톡 → Notion「AI 꿀팁」→ Obsidian 연동. 신규 `kakao_ingest.py`(기본 dry-run, `--apply`), `lib/kakao_parse.py`, `lib/tips_notion.py`. `sync_obsidian.py`에 `sync_tips()` 추가(`AI 꿀팁/` 평면 폴더, `link_url` 프론트매터, YouTube 고아 격리·tags 동기화에서 폴더 제외, `--no-tips`, `RESULT_JSON.tips_added`). `.env`에 `NOTION_TIPS_DB_ID`·`KAKAO_EXPORT_DIR`, `.gitignore`에 `KakaoTalk_Chat_*`. 첫 적재 99건, 멱등성(같은 CSV 재실행 0건) 확인. 지시서 `docs/tasks/2026-09-06-kakao-tips-ingest.md`.
