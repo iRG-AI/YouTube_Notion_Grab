@@ -1,12 +1,12 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
-**현재 버전: v3.0** (2026-09-06) · 레포 경로: `/Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap`
+**현재 버전: v2.7.1** (2026-08-28) · 레포 경로: `/Users/tycoonan/Documents/Codex/Projects/Youtube_Notion_Grap`
 
-> 2026-08-17에 `~/Documents/Claude/` → `~/Documents/Claude/Projects/` 로 이관했습니다.
+> 2026-08-17에 `~/Documents/Codex/` → `~/Documents/Codex/Projects/` 로 이관했습니다.
 > 이전 경로가 박힌 문서·스크립트를 발견하면 갱신 대상입니다.
-> 구 백업: `~/Claude/Youtube_Notion_Grap_BACKUP_20260717`.
+> 구 백업: `~/Codex/Youtube_Notion_Grap_BACKUP_20260717`.
 
 ## Commands
 
@@ -19,16 +19,8 @@ node scheduler.js              # 마스터 인제스트 모드 (기본)
 node scheduler.js --legacy     # 레거시 33개 재생목록 모드
 
 # Obsidian 동기화
-python3 sync_obsidian.py       # Notion DB → Obsidian .md 파일 증분 동기화 + Wiki Ingest (v3.0: AI 꿀팁 포함)
-python3 sync_obsidian.py --no-tips   # 꿀팁 동기화 제외 (YouTube 쪽만 진단할 때)
+python3 sync_obsidian.py       # Notion DB → Obsidian .md 파일 증분 동기화 + Wiki Ingest
 python3 build_obsidian_wiki.py # MOC + 키워드 허브 파일 재구성
-
-# 카카오톡 → Notion「AI 꿀팁」 (v3.0. 스케줄러가 --apply --if-new 로 자동 호출. 수동 실행은 /usr/bin/python3 — python.org 3.11은 SSL 인증서 없음)
-/usr/bin/python3 kakao_ingest.py                    # dry-run (기본). 생성될 행 표만 출력
-/usr/bin/python3 kakao_ingest.py --apply --limit=3  # 3건만 실제 생성 → Notion 육안 확인
-/usr/bin/python3 kakao_ingest.py --apply            # 전량
-/usr/bin/python3 kakao_ingest.py --apply --if-new   # 스케줄러 모드: 같은 CSV(mtime)면 Notion 조회 없이 즉시 종료 (--force 로 무시)
-/usr/bin/python3 lib/tips_notion.py                 # 「AI 꿀팁」DB 조회 상태 (건수·카테고리 분포)
 
 # Karpathy LLM Wiki
 python3 wiki_ingest.py              # 증분: 미처리 소스만 Wiki 합성
@@ -66,7 +58,7 @@ node -e "for(const f of ['pending_playlist_adds.json','pending_playlist_adds.dea
 재발급 직후 반드시 아래를 돌려 `✅ 일치`를 확인하세요.
 
 ```bash
-cd /Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap && node -e "
+cd /Users/tycoonan/Documents/Codex/Projects/Youtube_Notion_Grap && node -e "
 const yt=require('./lib/youtube_oauth');
 (async()=>{const t=await yt.getAccessToken();
 const j=await(await fetch('https://www.googleapis.com/youtube/v3/playlists?part=snippet&mine=true&maxResults=50',{headers:{Authorization:'Bearer '+t}})).json();
@@ -120,36 +112,10 @@ YouTube "AI 영상목록" (마스터 모드)
 | `sync_obsidian.py` | Notion DB → Obsidian 증분 동기화. 내부적으로 `wiki_ingest.py`와 연동. 고아 `.md` 격리 포함(아래 참조). |
 | `wiki_ingest.py` | Karpathy LLM Wiki 파이프라인. Obsidian 노트를 순회하며 Gemini로 개념 단위 지식 추출 및 합성. |
 | `wiki_config.py` | Wiki 인제스트 설정 관리. 230 RPD 토큰 제한, API Rate limit 추적 및 예외 처리 로직 포함. |
-| `build_obsidian_wiki.py` | 키워드별 허브 파일 27개 자동 생성(`_MOC/Claude.md` 등) + MOC 재구성. |
+| `build_obsidian_wiki.py` | 키워드별 허브 파일 27개 자동 생성(`_MOC/AGENTS.md` 등) + MOC 재구성. |
 | `migrate_classify.js` | 기존 영상 일괄 재분류. `.migrate_state.json`으로 재개 가능. |
 | `playlists.json` | 33개 토픽 재생목록 목록. 분류기의 허용 토픽 소스이기도 함. gitignore 대상. |
 | `scripts/clean_pending_queue.js` | (v2.5) 큐 중복 제거 + dead-letter 격리. 기본 dry-run, `--apply` 필요. |
-| `kakao_ingest.py` | (v3.0) 카톡 CSV → Notion「AI 꿀팁」DB. 기본 dry-run, `--apply` 필요. 중복 판정은 상태 파일이 아니라 **DB 전량 조회 + URL 정규화 키**. |
-| `lib/kakao_parse.py` | (v3.0) URL 추출·트래킹 파라미터 제거·중복 키·규칙 기반 제목/카테고리 추정. 순수 함수, 네트워크 없음. |
-| `lib/tips_notion.py` | (v3.0) 「AI 꿀팁」DB 조회/생성 래퍼. 속성 타입 표를 주석에 고정. 401/403 → `NotionAuthError` 즉시 종료. |
-
-### 카카오톡 →「AI 꿀팁」→ Obsidian (v3.0)
-
-```
-카톡 '나와의 채팅' 내보내기 (수동, 월 1회) → ~/Downloads/KakaoTalk_Chat_*.csv
-  → scheduler.js (YouTube 인제스트 완료 후) → kakao_ingest.py --apply --if-new
-       [최신 CSV mtime 비교(.kakao_state.json) → URL 정규화 → DB 전량 대조 → 신규만 POST /v1/pages → RESULT_JSON]
-  → Notion「AI 꿀팁」DB (NOTION_TIPS_DB_ID)
-  → sync_obsidian.py:sync_tips()  [VAULT/AI 꿀팁/*.md, 신규만]
-  → wiki_ingest.py / build_obsidian_wiki.py  (기존 그대로 공유 — 합성 로직 두 벌 만들지 않는다)
-```
-
-- `.env`: `NOTION_TIPS_DB_ID`(=`3bca3cbc…`), `KAKAO_EXPORT_DIR`. **`NOTION_DB_ID`(YouTube용)와 다른 변수명**이다. 섞으면 YouTube 파이프라인이 엉뚱한 DB에 쓴다.
-- 「AI 꿀팁」속성 타입은 `lib/tips_notion.py` 상단 주석이 원본이다. `태그`는 **rich_text(쉼표 결합)**, `출처`는 **url 타입이지만 호스트만** 저장(`github.com`). 추측 금지 — 틀리면 400.
-- `kakao_ingest.py`의 `--since` 기본값은 `2026-03-01`(DB 시작일). 그 이전 카톡 링크 103건은 쇼핑·개인 링크라 AI 자료가 아니다.
-- **꿀팁 노트는 YouTube 로직과 격리된다.** `get_existing_vault_info()`가 `AI 꿀팁/` 폴더를 걷지 않으므로 고아 격리 분모·tags 동기화에 섞이지 않는다. 노트 프론트매터는 `link_url`이며 **`video_url`을 절대 쓰지 않는다** — 쓰는 순간 고아 격리 대상이 된다. `tags` 키도 쓰지 않는다(`keywords`) — `build_obsidian_wiki`가 tags 없는 파일을 폴더명 MOC(`_MOC/AI 꿀팁 MOC.md`)로 묶는다.
-- 폴더는 **평면 구조**다. `wiki_ingest`·`build_obsidian_wiki`가 최상위 폴더 바로 아래 파일만 읽으므로 카테고리 하위 폴더를 만들면 위키에서 사라진다. 카테고리는 프론트매터 `category`로만 둔다.
-- 같은 날 같은 추정 제목이 여럿이면(`노션 자료 (제목 미확인)`) 파일명이 충돌해 덮어쓰기 → notion_id 유실 → 매 실행 재생성된다. 충돌 시 **id 끝 6자리**를 붙인다(앞자리는 워크스페이스 공통 접두라 구분 불가).
-- 꿀팁 노트는 본문이 거의 없다(제목·링크·태그·메모). `wiki_ingest`가 그대로 먹지만 추출 품질은 낮다. URL 본문을 긁어 Gemini로 요약하는 2차 확장은 미구현(선택).
-- **실행은 `/usr/bin/python3`.** PATH의 `python3`(python.org 3.11)는 루트 인증서가 없어 Notion 호출이 `CERTIFICATE_VERIFY_FAILED`로 죽는다. wiki-ingest 데몬과 같은 인터프리터다.
-- `.kakao_state.json`은 "이 CSV는 이미 봤다"는 **스킵 최적화일 뿐 중복 방지 장치가 아니다.** 중복 방지는 언제나 DB 대조다. `--apply`가 실패 없이 끝났을 때만 기록하고 dry-run·`--limit`은 기록하지 않는다.
-- `scheduler.js`의 카톡 훅(`runKakaoIngest`)은 **절대 reject하지 않는다.** 카톡 단계가 Obsidian 동기화를 막으면 안 된다. `RESULT_JSON.error === 'auth'`면 로그만 남기고 다음 단계로 간다. (지시서 `docs/tasks/2026-09-06-scheduler-kakao-hook.md`)
-- 꿀팁이 신규 추가되면 `sync_obsidian.py`가 **제한 없이** `wiki_ingest.py`를 띄운다(기존 동작). 처음 대량 적재할 때는 `sync_tips()`를 단독 실행한 뒤 `wiki_ingest.py --limit=20`으로 나눠 돌릴 것. 2026-09-06 첫 적재 시 99건이 한꺼번에 들어가 수동 중단했다.
 
 ### Obsidian 고아 파일 격리 (`sync_obsidian.py:quarantine_orphans`)
 
@@ -251,7 +217,7 @@ GCP       : youtube-data-api-487306, 게시 상태 = 프로덕션
 | `com.irichgreen.ytsummarizer` | `scheduler.js` | 00 / 06 / 12 / 18시 | `/opt/homebrew/bin/node` |
 | `com.irichgreen.wiki-ingest` | `wiki_ingest.py --full` | 매일 03:00 | `/usr/bin/python3` (시스템 파이썬) |
 
-- **실제 동작하는 plist는 `~/Library/LaunchAgents/`에 있다.** 레포 루트의 plist 3개는 그 원본이며, 2026-08-17부터 3개 모두 실경로(`/Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap`)가 들어 있다. 예전에 `server`·`ytsummarizer` 두 개에 있던 `/Users/사용자명/youtube-notion-app` 플레이스홀더는 제거했다.
+- **실제 동작하는 plist는 `~/Library/LaunchAgents/`에 있다.** 레포 루트의 plist 3개는 그 원본이며, 2026-08-17부터 3개 모두 실경로(`/Users/tycoonan/Documents/Codex/Projects/Youtube_Notion_Grap`)가 들어 있다. 예전에 `server`·`ytsummarizer` 두 개에 있던 `/Users/사용자명/youtube-notion-app` 플레이스홀더는 제거했다.
 - 각 plist는 `ProgramArguments`·`WorkingDirectory` **2곳에 절대경로**가 박혀 있다. 경로 변경 시 6군데 동기화 + `plutil -lint` + unload/load.
 - `install-server.sh`·`install-scheduler.sh`는 plist를 `~/Library/LaunchAgents/`로 복사하며 **sed로 이 실경로를 `$APP_DIR`로 치환**한다. 레포 경로를 바꾸면 두 스크립트의 sed 패턴도 같이 고쳐야 치환이 동작한다.
 - `com.irichgreen.server`는 상주 프로세스라 **코드를 고쳐도 재기동 전까지 반영되지 않는다.**
@@ -259,13 +225,13 @@ GCP       : youtube-data-api-487306, 게시 상태 = 프로덕션
 
 ### 보안 — 절대 커밋 금지
 
-`.gitignore` 대상: `.env`, `.env.*`, `node_modules/`, `__pycache__/`, `*.log`, `playlists.json`, `.DS_Store`, `.claude/settings.local.json`, `wiki_index.json`, `wiki_index.vec`, `.migrate_state.json`, `.quota_state.json`, `.wiki_state.json`, `.wiki_quota.json`, `pending_playlist_adds*`
+`.gitignore` 대상: `.env`, `.env.*`, `node_modules/`, `__pycache__/`, `*.log`, `playlists.json`, `.DS_Store`, `.Codex/settings.local.json`, `wiki_index.json`, `wiki_index.vec`, `.migrate_state.json`, `.quota_state.json`, `.wiki_state.json`, `.wiki_quota.json`, `pending_playlist_adds*`
 
 > ⚠️ **새 상태 파일을 만들면 `.gitignore` 패턴을 반드시 재확인한다.**
 > `pending_playlist_adds.json*` 패턴이 `.dead.json`·`.backup.*.json`을 못 잡아 커밋될 뻔한 사고가 있었다(2026-08-17). 현재는 `pending_playlist_adds*`로 수정됨.
 > 새 파일 추가 시 `git check-ignore -q <파일>`로 확인할 것.
 
-`.env`·`.claude/`·상태 파일은 gitignore라 **`git clone`으로 복제되지 않는다.** 환경 이전은 clone이 아니라 `mv`/수동 복사로 한다.
+`.env`·`.Codex/`·상태 파일은 gitignore라 **`git clone`으로 복제되지 않는다.** 환경 이전은 clone이 아니라 `mv`/수동 복사로 한다.
 
 ### 로그 파일
 
@@ -279,22 +245,176 @@ GCP       : youtube-data-api-487306, 게시 상태 = 프로덕션
 
 ---
 
-## 산출물 규칙
-
-- 커밋 전 **`README.md`만** 갱신한다. **`README.html`은 v3.0에서 폐지 — 다시 만들지 않는다.** (2026-09-06)
-- `README.md` 버전 이력은 요약 표 1행 + 상세 변경 내역 1절을 함께 쓴다. 메이저는 아키텍처 확장(소스·저장소·합성 엔진 추가), 마이너는 기능·안정성.
-- `CLAUDE.md`는 구조·제약이 바뀔 때 갱신하고 하단 이력에 날짜와 함께 남긴다.
-- `AGENTS.md`는 **git 추적 대상**이다(2026-09-08~). `CLAUDE.md`와 함께 갱신하고, 두 문서가 어긋나면 **`CLAUDE.md`가 이긴다**.
-- Cowork → Claude Code 핸드오프는 `docs/tasks/YYYY-MM-DD-<슬러그>.md` 작업지시서로 한다.
-- `git push`는 사용자 확인 후.
-
 ## 변경 이력
 
-- **2026-09-08 (문서)** — `AGENTS.md` git 추적 시작(420줄, 그동안 untracked). 추적 밖이라 diff·리뷰에 안 잡혀 `AGENTS.md:409`가 "README.md + README.html 양쪽 동시 갱신"으로 남아 `CLAUDE.md:284`(v3.0 폐지)와 어긋나 있었다 — 금지 문구로 교체하고 추적 규약을 산출물 규칙에 추가. 코드 무변경.
-- **2026-09-06 (v3.0)** — 메이저 승격: 지식 소스 2원화(YouTube + 카카오톡). `kakao_ingest.py`에 `--if-new`·`.kakao_state.json`·`RESULT_JSON`·`KakaoTalk_Chat_안진훈_` 접두 필터(NFC) 추가. `scheduler.js` 훅 지시서 `docs/tasks/2026-09-06-scheduler-kakao-hook.md`. 생성 경로 검증(테스트 행 생성→아카이브). **`README.html` 삭제·폐지 — 앞으로 만들지 않는다.** README.md v3.0 상세 이력·데이터 흐름도.
-- **2026-09-06 (v2.8, 같은 날 v3.0에 흡수)** — 카카오톡 → Notion「AI 꿀팁」→ Obsidian 연동. 신규 `kakao_ingest.py`(기본 dry-run, `--apply`), `lib/kakao_parse.py`, `lib/tips_notion.py`. `sync_obsidian.py`에 `sync_tips()` 추가(`AI 꿀팁/` 평면 폴더, `link_url` 프론트매터, YouTube 고아 격리·tags 동기화에서 폴더 제외, `--no-tips`, `RESULT_JSON.tips_added`). `.env`에 `NOTION_TIPS_DB_ID`·`KAKAO_EXPORT_DIR`, `.gitignore`에 `KakaoTalk_Chat_*`. 첫 적재 99건, 멱등성(같은 CSV 재실행 0건) 확인. 지시서 `docs/tasks/2026-09-06-kakao-tips-ingest.md`.
 - **2026-08-28 (v2.7.1)** — 토픽 분류의 일시적 서버 오류(5xx) 재시도 추가. `scheduler.js` 분류 catch 블록의 재시도 대상을 429/quota → +`5xx`·`UNAVAILABLE`·`overloaded`·`high demand`로 확장하고 지수 백오프(2→15초 상한)를 적용, 401/403은 즉시 중단으로 명시, `keysCount > 1` 조건을 키 교체에만 적용해 키 1개 환경에서도 재시도되게 했다. 재시도 소진 시 `cls`가 `undefined`인 채 `cls.topics`로 진입하던 잠복 TypeError 경로를 가드 2개로 차단. 지시서 `docs/tasks/2026-08-28-classify-transient-retry.md`.
 - **2026-08-19 (v2.7)** — 재생목록 쓰기 성공/실패 계측 도입. `.quota_state.json`에 `ok`/`fail` 추가(하위호환 기본값 0), `consumeQuota(units, outcome)`로 확장해 `addToPlaylist` 양쪽 경로에서 계상. 텔레그램 큐 블록을 쓰기 결과 3분기(성공/전부실패/시도없음) + 순감 기준 소진 예상일로 교체 — v2.5 이후 "시도했으나 전부 실패한 날"을 구조적으로 감지하지 못하던 구멍을 막았다. 지시서 `docs/tasks/2026-08-18-write-outcome-metrics.md`.
 - **2026-08-17 (v2.6)** — quota 일 경계를 UTC → 태평양시(PT)로 교정. `todayKey()`를 `Intl` 기반으로 바꾸고 export해 `scheduler.js:1360`이 같은 키를 쓰게 했다(텔레그램 오경보 제거). KST 09:00~16:00 동안 스로틀이 무력화되던 구간을 없앴다. 지시서 `docs/tasks/2026-08-17-quota-day-boundary.md`. 커밋 `7eb112c`.
 - **2026-08-17 (v2.5)** — 레포를 `Projects/` 하위로 이관. 대기 큐 안전장치 도입(중복 방지·연속 실패 10회 차단기·dead-letter 격리·실패 요청 quota 계상), `scripts/clean_pending_queue.js` 신규, `.gitignore` 패턴 수정. OAuth 토큰을 「타이쿤안」 채널로 재발급하고 GCP 게시 상태를 프로덕션으로 전환. 큐 5,392 → 2,365 정리. 커밋 `66ab4a2`.
 - **2026-05-21** — 최초 작성.
+
+## Imported Claude Cowork project instructions
+
+# A. 프로젝트 지침 (여기부터 복사)
+
+## 프로젝트 개요
+
+YouTube 영상을 자동 수집·요약·분류해 Notion DB와 YouTube 재생목록에 적재하고,
+Obsidian 볼트로 동기화한 뒤 LLM Wiki(개념·엔티티 페이지)까지 합성하는 파이프라인.
+Node.js(수집·분류·서버) + Python(Obsidian 동기화·Wiki 합성) 혼합 구성.
+
+- 레포: `/Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap`
+- GitHub: `iRG-AI/YouTube_Notion_Grab` (main), 현재 v2.5
+- 상세 아키텍처는 레포 루트 `CLAUDE.md` 참조
+
+## 역할 분담 — Cowork(여기) / Claude Code
+
+**Cowork = 컨트롤 타워.** 개선사항 정리, 우선순위 결정, 작업지시서 작성,
+로그·상태 진단, 문서 산출물, 결과 검증.
+
+**Claude Code = 실행.** 코드 수정, 테스트, launchd 제어, 커밋.
+
+핸드오프는 **작업지시서 `.md`**로 한다. `docs/tasks/YYYY-MM-DD-<영문-슬러그>.md`에
+저장하고 "해당 파일 읽고 그대로 실행"만 지시한다. 지시서 필수 항목:
+배경 → AS-IS·TO-BE 코드 → 검증 명령과 기대 출력 → 데몬 재기동 → 롤백 → 범위 밖.
+
+문구 수정·상수 변경 같은 잔손질은 Cowork에서 직접 처리한다.
+
+## 작업 시작 규칙
+
+1. 코드·구조 질문은 추측하지 말고 `CLAUDE.md`를 먼저 읽는다.
+2. **Node 영역인지 Python 영역인지 먼저 구분한다.**
+   - Node: `scheduler.js`, `server.js`, `lib/*.js`, `migrate_classify.js`, `wiki_mcp.js`
+   - Python: `sync_obsidian.py`, `wiki_ingest.py`, `wiki_config.py`, `build_obsidian_wiki.py`
+3. 파일 수정 전 `git status`로 미커밋 변경 확인.
+4. 진단 요청 시 추측 금지 — 로그·`git`·`launchctl`·파일 mtime으로 근거를 확인하고 답한다.
+
+## 🚨 상시 주의사항
+
+### launchd 데몬 3종
+
+| 라벨 | 실행 대상 | 스케줄 |
+|---|---|---|
+| `com.irichgreen.server` | `server.js` (포트 3000) | `KeepAlive`, `RunAtLoad` — 상주 |
+| `com.irichgreen.ytsummarizer` | `scheduler.js` | 00 / 06 / 12 / 18시 |
+| `com.irichgreen.wiki-ingest` | `wiki_ingest.py --full` | 매일 03:00 |
+
+- plist는 `~/Library/LaunchAgents/`. 각각 `ProgramArguments`·`WorkingDirectory`
+  **2곳에 절대경로**가 박혀 있다. 경로를 바꾸면 6군데 동기화 + `plutil -lint` + unload/load.
+- `com.irichgreen.server`는 상주 프로세스라 **코드를 고쳐도 재기동 전까지 반영되지 않는다.**
+- `wiki-ingest`만 **`/usr/bin/python3`(시스템 파이썬)**, Node는 `/opt/homebrew/bin/node`.
+- **`brew upgrade` 후에는 상주 데몬을 반드시 재기동한다.** 데몬은 기동 시점의 Cellar
+  경로를 물고 도는데, 업그레이드로 그 폴더가 삭제되면 이후 지연 import가 전부 실패한다.
+  이미 로드된 모듈은 멀쩡히 동작해 **부분 실패로 나타나므로 알아채기 어렵다.**
+  (2026-08-17 자매 프로젝트에서 실장애)
+
+### YouTube OAuth — 가장 자주 깨지는 지점
+
+```
+필요 채널 : 타이쿤안 (UCGDu0ceSSUgzhrRHbW0pQ9w)
+GCP       : youtube-data-api-487306, 게시 상태 = 프로덕션
+```
+
+- **토큰 재발급 시 반드시 「타이쿤안」 채널을 선택한다.** 다른 계정/채널로 발급하면
+  33개 재생목록에 대해 `403 playlistItemsNotAccessible`이 난다.
+  이 에러는 "재생목록이 삭제됨"이 아니라 **계정 불일치 신호로 먼저 의심할 것.**
+- GCP 게시 상태가 **「테스트」로 돌아가면 refresh token이 7일마다 만료**된다.
+  `invalid_grant`가 재발하면 게시 상태부터 확인한다.
+- 재발급은 `node oauth_setup.js`. 다중 로그인 세션 충돌로
+  `accounts.google.com/info/unknownerror`가 뜨면 출력된 URL을 **시크릿 창**에 붙여넣는다.
+- 발급 후 반드시 계정 일치를 먼저 검증한다 (1유닛).
+
+```bash
+cd /Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap && node -e "
+const yt=require('./lib/youtube_oauth');
+(async()=>{const t=await yt.getAccessToken();
+const j=await(await fetch('https://www.googleapis.com/youtube/v3/playlists?part=snippet&mine=true&maxResults=50',{headers:{Authorization:'Bearer '+t}})).json();
+if(j.error)return console.log('ERR',j.error.errors?.[0]?.reason);
+const mine=new Map((j.items||[]).map(x=>[x.id,x.snippet]));
+const want=require('./playlists.json').map(p=>(p.url.match(/list=([^&]+)/)||[])[1]).filter(Boolean);
+const hit=want.filter(x=>mine.has(x));
+console.log('채널:',[...new Set([...mine.values()].map(s=>s.channelTitle))].join(','),'| 일치',hit.length+'/'+want.length);
+console.log(hit.length===want.length?'✅ 일치':'❌ 불일치 — 재발급 필요');})();"
+```
+
+### YouTube quota
+
+- 일 **10,000유닛**, 태평양시 자정 리셋 = **KST 16:00**.
+- `playlistItems.insert` **50유닛**, 대부분의 읽기 1유닛, `search.list` 100유닛.
+- **실패 요청도 quota를 소비한다.** 계정이 어긋난 채 방치하면 하루치가 통째로 날아간다.
+- 하루 처리 가능한 재생목록 추가는 **약 190건**이 상한. 코드로 늘릴 수 없다.
+- 무료 할당량이자 상한선이라 **초과해도 과금되지 않는다.** 403으로 거부될 뿐이다.
+- 진행 상황은 `.quota_state.json`(`date`/`used`)으로 본다. `date`가 오늘이 아니면
+  **그날 YouTube 쓰기가 한 건도 성공하지 않았다는 뜻**이다. 최우선 이상 신호.
+
+### 재생목록 대기 큐 (v2.5 구조)
+
+| 파일 | 역할 |
+|---|---|
+| `pending_playlist_adds.json` | 처리 대기 큐 |
+| `pending_playlist_adds.dead.json` | 영구 실패·재시도 초과 격리 (dead-letter) |
+| `pending_playlist_adds.backup.*.json` | 정리 스크립트가 만든 백업 (**삭제 금지**) |
+| `scripts/clean_pending_queue.js` | 중복 제거 + dead 격리. `--dry-run` 기본, `--apply` 필요 |
+
+v2.5에서 들어간 안전장치 — **건드리지 말 것.**
+
+- `appendPending`은 `(videoId, playlistId)` 중복을 적재하지 않는다.
+  (없으면 큐가 며칠 만에 2배로 부푼다. 실제로 46.7%까지 중복됐던 이력)
+- `flushPendingQueue`는 **연속 실패 10회에서 큐 처리를 중단**한다.
+  403을 수백 번 난사하면 구글이 어뷰징으로 보고 계정을 정지시킨다.
+- 개별 항목은 `retryCount` 5회 초과 시 dead-letter로 보낸다. 무한 순환 금지.
+- `migrate_classify.js`도 **같은 큐 파일에 쓴다.** 큐 로직을 바꾸면 양쪽 다 고칠 것.
+
+### 보안 — 절대 커밋 금지
+
+`.gitignore`: `.env`, `.env.*`, `node_modules/`, `__pycache__/`, `*.log`,
+`playlists.json`, `.DS_Store`, `.claude/settings.local.json`,
+`wiki_index.json`, `wiki_index.vec`, `.migrate_state.json`, `.quota_state.json`,
+`.wiki_state.json`, `.wiki_quota.json`, `pending_playlist_adds*`
+
+`.env` 키: `YOUTUBE_API_KEY`, `YOUTUBE_OAUTH_CLIENT_ID/SECRET/REFRESH_TOKEN`,
+`GEMINI_API_KEY`, `GEMINI_API_KEYS`(무료 4개 로테이션), `NOTION_TOKEN`, `NOTION_DB_ID`,
+`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
+
+> ⚠️ **새 상태 파일을 만들면 `.gitignore` 패턴을 반드시 재확인한다.**
+> `pending_playlist_adds.json*`이 `.dead.json`·`.backup.*.json`을 못 잡아
+> 커밋될 뻔한 사고가 있었다(2026-08-17). `git check-ignore -q <파일>`로 확인할 것.
+
+`.env`·`.claude/`·상태 파일은 gitignore라 **git clone으로 복제되지 않는다.**
+환경 이전은 clone이 아니라 `mv`/수동 복사로 한다.
+
+### API 안전 원칙 (기능 구현보다 우선)
+
+1. **401/403(인증 만료·권한 거부·프로젝트 정지) 감지 시 연쇄 요청을 멈추고 즉시 종료.**
+   실패 요청을 루프로 난사하면 구글 보안 봇이 어뷰징으로 판단해 계정 정지를 유발한다.
+2. 일시 오류(429, 5xx) 재시도는 고정 대기가 아니라 **지수 백오프**. 최대 시도 초과 시 중단.
+3. 개발·테스트는 별도 테스트 계정/GCP 프로젝트로 격리한다.
+
+### 자주 깨지는 지점
+
+- **한글 NFC**: macOS는 파일명을 NFD로 저장한다. Notion 태그·재생목록명·Obsidian
+  파일명은 모두 `.normalize('NFC')` 필수. 중복 태그 버그의 주범.
+- **Gemini 비용**: 2.5 Flash 호출 시
+  `generationConfig: { thinkingConfig: { thinkingBudget: 0 } }` 필수 (약 85% 절감).
+- **Notion 한계**: 페이지 생성 시 children 최대 100블록, `rich_text` 항목당 2000자,
+  배열 최대 100개.
+- **토픽 추가 시**: `playlists.json` 추가 + `build_obsidian_wiki.py`의
+  `VALID_NOTION_TAGS` 동기화, 둘 다 해야 한다.
+- **Obsidian VAULT 경로**(`~/Documents/Obsidian/AI LLM Wiki/...`)가 소스 6곳에
+  하드코딩돼 있다. 레포 경로 일괄 치환 시 **같이 망가지지 않게 주의.**
+- `scheduler.log`는 20MB 규모다. 통째로 읽지 말고 `tail`/`grep`으로 볼 것.
+
+## 산출물 규칙
+
+- 커밋 전 **`README.md`만** 갱신, semver Changelog 반영. **`README.html`은 생성하지 않는다** (v3.0 폐지)
+- `CLAUDE.md`는 구조·제약이 바뀔 때 갱신하고 하단 이력에 날짜와 함께 남긴다
+- `git push`는 사전 확인 후 실행
+- Obsidian·Notion용 출력은 마크다운 우선
+
+## 답변 방식
+
+- 결론 먼저, 그다음 부연. 불필요한 서론·사족 생략
+- 실행 가능한 코드/명령 위주, 구체적 숫자 포함
+- 복잡한 솔루션보다 단순하고 실행 가능한 구조 우선
+
+#
