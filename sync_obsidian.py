@@ -337,6 +337,29 @@ def sync_new_pages(pages=None):
 #   · 폴더는 TIPS_FOLDER 평면 구조 — wiki_ingest/build_obsidian_wiki 가 최상위 폴더만 순회하므로 하위 폴더 금지
 #   · tags 키를 쓰지 않는다 — build_obsidian_wiki 가 tags 없으면 폴더명으로 MOC 를 만든다 (_MOC/AI 꿀팁.md)
 #   · 카테고리 '모델/LLM' 의 슬래시는 파일명에 못 쓴다 → safe_filename 이 '_' 로 치환
+# launchd 의 com.irichgreen.wiki-ingest 가 StandardOutPath 로 쓰는 바로 그 파일.
+# sync_obsidian 경로에서 띄운 wiki_ingest 의 출력도 여기에 append 해서
+# 두 실행 경로를 한 로그에서 보게 한다.
+WIKI_LOG = os.path.expanduser('~/Library/Logs/irichgreen/wiki-ingest.log')
+
+def _tee_wiki_log(stdout, stderr):
+    """서브프로세스로 띄운 wiki_ingest 의 출력을 wiki-ingest.log 에 append.
+
+    실패해도 본 동기화를 죽이지 않는다 (로그는 부가 기능).
+    """
+    if not (stdout or stderr):
+        return
+    try:
+        os.makedirs(os.path.dirname(WIKI_LOG), exist_ok=True)
+        with open(WIKI_LOG, 'a', encoding='utf-8') as f:
+            f.write(f"\n───── via sync_obsidian.py (subprocess) {datetime.now().isoformat(timespec='seconds')} ─────\n")
+            if stdout:
+                f.write(stdout if stdout.endswith('\n') else stdout + '\n')
+            if stderr:
+                f.write('[stderr]\n' + stderr)
+    except OSError as e:
+        log(f'⚠️  wiki-ingest.log 기록 실패(무시): {e}')
+
 def sync_tips():
     if not NOTION_TIPS_DB_ID:
         log('ℹ️  NOTION_TIPS_DB_ID 없음 — 꿀팁 동기화 건너뜀\n')
@@ -543,6 +566,11 @@ if __name__ == '__main__':
                 [sys.executable, wiki_script],
                 capture_output=True, text=True
             )
+            # ★ 캡처한 출력을 launchd 와 같은 로그에 흘려보낸다 (2026-09-10).
+            #   안 그러면 이 경로의 실행이 ytsummarizer.log 에만 남아
+            #   wiki-ingest.log 로는 안 보인다 — WIKI_RESULT 가 유일한 판정 지표인데
+            #   그게 사라지면 "돌았는지 안 돌았는지" 자체를 알 수 없다.
+            _tee_wiki_log(wiki_result.stdout, wiki_result.stderr)
             if wiki_result.returncode != 0:
                 wiki_err = wiki_result.stderr[:200]
                 log(f'❌ Wiki Ingest 오류:\n{wiki_err}')

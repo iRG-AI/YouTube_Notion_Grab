@@ -1,6 +1,6 @@
 # 🎬 YouTube + 📎 카카오톡 → Notion → Obsidian LLM Wiki
 
-**현재 버전: v3.0** (2026-09-06)
+**현재 버전: v3.1** (2026-09-10)
 
 YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하고, 카카오톡 '나와의 채팅'에 저장해 둔 **AI 자료 링크**를 자동 수집하여
 각각 **Notion DB**(영상 DB ·「AI 꿀팁」DB)에 적재한 뒤, **Obsidian**으로 동기화해 하나의 **LLM Wiki** 지식베이스로 합성하는 자동화 파이프라인입니다.
@@ -298,6 +298,7 @@ bash install-scheduler.sh
 
 | 버전 | 날짜 | 주요 내용 요약 |
 | :-- | :--- | :--- |
+| **v3.1** | 2026-09-10 | **Wiki 인제스트 할당량 소모 구조 교정**: Gemini 429를 `quotaId`로 RPD/RPM 분기(분당 한도 한 번에 키를 하루치 폐기하던 손실 제거), 5xx·네트워크 오류 지수 백오프 추가(전체 오류의 24%가 재시도 없이 버려지던 자리), 무료 티어 일 경계를 태평양시로 교정. `--rebuild` 경로로 띄운 wiki_ingest 의 출력을 `wiki-ingest.log` 에 합류시켜 실행 경로 2개를 한 로그에서 판정 가능하게 함 |
 | **v3.0** | 2026-09-06 | **지식 소스 2원화 — 카카오톡 링크 파이프라인 통합**: 카카오톡 '나와의 채팅' CSV → Notion「AI 꿀팁」DB → Obsidian `AI 꿀팁/` 노트 → 기존 Wiki 합성·MOC 를 그대로 공유. `kakao_ingest.py`·`lib/kakao_parse.py`·`lib/tips_notion.py` 신규, `sync_obsidian.py:sync_tips()`, `scheduler.js` 훅(`--apply --if-new`), 텔레그램 통합 알림. 영상 노트와 꿀팁 노트의 격리 원칙 확립. `README.html` 폐지 |
 | **v2.7.1** | 2026-08-28 | **토픽 분류의 일시적 서버 오류(5xx) 재시도 추가**: 요약 경로는 503에 키 로테이션 + 재시도로 대응하는 반면 분류 경로는 429/quota만 재시도 대상이라 503 한 번에 영상이 떨어지던 비대칭을 교정하고, 재시도 소진 시 발생하던 잠복 TypeError 경로를 차단 |
 | **v2.7** | 2026-08-19 | **재생목록 쓰기 성공/실패 계측 및 알림 교정**: `.quota_state.json`이 성공·실패를 구분하지 않아 "시도했으나 전부 실패한 날"을 감지하지 못하던 구멍을 막고, 텔레그램 알림에 당일 배수량·유입량·순감 기준 소진 예상일을 표기 |
@@ -315,6 +316,27 @@ bash install-scheduler.sh
 ---
 
 ### 📝 상세 변경 내역 (Detailed Change Log)
+
+#### [v3.1] — 2026-09-10 (🔑 Wiki 인제스트 할당량 소모 구조 교정)
+
+**계기.** `wiki-ingest.log` 의 WIKI_RESULT 29회 누적이 processed 212 / errors 165 — **오류율 44%**. 원인을 추측하지 않고 로그에서 전량 분류했다.
+
+| 오류 유형 | 건수 | 비율 | 교정 전 처리 |
+| :-- | --: | --: | :-- |
+| 429 RPD (`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, quotaValue 20) | 108 | 65% | 키 교체 — 정당 |
+| 429 RPM (`GenerateRequestsPerMinutePerProjectPerModel-FreeTier`, quotaValue 5) | 17 | 10% | RPD로 오인해 키를 하루치 폐기 |
+| HTTP 503 Service Unavailable | 39 | 24% | 재시도 없이 소스 폐기 |
+| `<urlopen error timed out>` | 1 | 1% | 동일 |
+
+파싱 실패·인증 오류는 **0건**이었다. 즉 "429가 많다"가 아니라 **재시도했으면 살았을 오류가 4분의 1**이라는 것이 실제 문제였다.
+
+- **429 를 `quotaId` 로 분기 (`wiki_config.py:_classify_429`)** — 구글은 `error.details[].QuotaFailure.violations[].quotaId` 에 어느 한도인지, `RetryInfo.retryDelay` 에 권장 대기시간을 명시한다. RPM 이면 `retryDelay+2`초(상한 65) 대기 후 **같은 키로 재시도**하고, RPD 일 때만 그날 폐기한다. `quotaId` 가 없으면 추측으로 분기하지 않고 **응답 본문 전체를 로그에 남긴 뒤** 보수적으로 RPD 취급한다.
+- **5xx·네트워크 오류 지수 백오프 추가** — 2→15초 상한, 3회, 같은 키 유지. `scheduler.js` 가 v2.7.1 에서 JS 쪽에 넣은 것과 같은 결함이 파이썬 쪽에 남아 있었다.
+- **무료 티어 일 경계를 태평양시로 (`_today()`)** — KST 자정 기준으로 세면 로컬 카운터만 리셋되고 구글 RPD 는 그대로라, KST 00시 실행이 매번 '깨끗한 장부'로 시작해 즉시 429 를 맞았다. v2.6 의 YouTube quota 교정과 같은 취지.
+- **실행 경로 2개를 한 로그로 (`sync_obsidian.py:_tee_wiki_log`)** — wiki_ingest 는 launchd(17:30) 외에 `scheduler.js` 의 `--rebuild` 경로로도 돈다. 후자의 stdout 이 `capture_output=True` 때문에 `ytsummarizer.log` 로 흡수돼, `.wiki_state.json` 의 `last_run` 만 갱신되고 로그는 비어 "안 도는 줄" 오판하기 좋았다. 이제 캡처한 출력을 `wiki-ingest.log` 에 append 한다 — **`WIKI_RESULT` 줄이 유일한 판정 지표이므로 반드시 남는다.** `--rebuild` 중복 실행 자체는 두 경로가 서로 다른 PT 장부를 쓰므로 의도된 동작으로 유지했다.
+- **문서 교정** — launchd 표의 wiki-ingest 항목을 실제값(`/opt/homebrew/bin/python3`, 매일 17:30, 증분 모드)으로 바로잡았다. plist·`scheduler.js:1454`·`server.js:232` 3곳이 같은 인터프리터를 하드코딩하고 `sync_obsidian.py` 가 `sys.executable` 을 물려주므로 두 실행 경로의 파이썬은 동일하다.
+
+**검증.** `wiki_ingest.py --limit=6` → processed 6 / **errors 0** (RPD 429 2건을 키 교체로 흡수). `sync_obsidian.py --rebuild` → `wiki-ingest.log` 에 `───── via sync_obsidian.py (subprocess) ─────` 블록과 `WIKI_RESULT` 기록 확인.
 
 #### [v3.0] — 2026-09-06 (📎 지식 소스 2원화 — 카카오톡 링크 파이프라인 통합)
 

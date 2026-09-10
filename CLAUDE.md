@@ -119,7 +119,7 @@ YouTube "AI 영상목록" (마스터 모드)
 | `lib/youtube_oauth.js` | YouTube OAuth2 쓰기 전용. access_token 메모리 캐시(50분), 일일 quota 추적(`.quota_state.json`), 호출 간 200ms rate limit. |
 | `sync_obsidian.py` | Notion DB → Obsidian 증분 동기화. 내부적으로 `wiki_ingest.py`와 연동. 고아 `.md` 격리 포함(아래 참조). |
 | `wiki_ingest.py` | Karpathy LLM Wiki 파이프라인. Obsidian 노트를 순회하며 Gemini로 개념 단위 지식 추출 및 합성. |
-| `wiki_config.py` | Wiki 인제스트 설정 관리. 230 RPD 토큰 제한, API Rate limit 추적 및 예외 처리 로직 포함. |
+| `wiki_config.py` | Wiki 인제스트 설정 + Gemini 호출 래퍼. 4키 로테이션, RPD 20 추적(`.wiki_quota.json`), 429 RPD/RPM 분기, 5xx 백오프. |
 | `build_obsidian_wiki.py` | 키워드별 허브 파일 27개 자동 생성(`_MOC/Claude.md` 등) + MOC 재구성. |
 | `migrate_classify.js` | 기존 영상 일괄 재분류. `.migrate_state.json`으로 재개 가능. |
 | `playlists.json` | 33개 토픽 재생목록 목록. 분류기의 허용 토픽 소스이기도 함. gitignore 대상. |
@@ -146,7 +146,7 @@ YouTube "AI 영상목록" (마스터 모드)
 - 폴더는 **평면 구조**다. `wiki_ingest`·`build_obsidian_wiki`가 최상위 폴더 바로 아래 파일만 읽으므로 카테고리 하위 폴더를 만들면 위키에서 사라진다. 카테고리는 프론트매터 `category`로만 둔다.
 - 같은 날 같은 추정 제목이 여럿이면(`노션 자료 (제목 미확인)`) 파일명이 충돌해 덮어쓰기 → notion_id 유실 → 매 실행 재생성된다. 충돌 시 **id 끝 6자리**를 붙인다(앞자리는 워크스페이스 공통 접두라 구분 불가).
 - 꿀팁 노트는 본문이 거의 없다(제목·링크·태그·메모). `wiki_ingest`가 그대로 먹지만 추출 품질은 낮다. URL 본문을 긁어 Gemini로 요약하는 2차 확장은 미구현(선택).
-- **실행은 `/usr/bin/python3`.** PATH의 `python3`(python.org 3.11)는 루트 인증서가 없어 Notion 호출이 `CERTIFICATE_VERIFY_FAILED`로 죽는다. wiki-ingest 데몬과 같은 인터프리터다.
+- **실행은 `/usr/bin/python3`.** PATH의 `python3`(python.org 3.11)는 루트 인증서가 없어 Notion 호출이 `CERTIFICATE_VERIFY_FAILED`로 죽는다. (2026-09-10 실측: PATH 의 `python3` 는 이제 Homebrew 3.14.7 이고 Notion TLS 가 정상이다 — python.org 3.11 은 더 이상 PATH 에 없다. wiki-ingest 데몬은 `/opt/homebrew/bin/python3` 를 쓴다.)
 - `.kakao_state.json`은 "이 CSV는 이미 봤다"는 **스킵 최적화일 뿐 중복 방지 장치가 아니다.** 중복 방지는 언제나 DB 대조다. `--apply`가 실패 없이 끝났을 때만 기록하고 dry-run·`--limit`은 기록하지 않는다.
 - `scheduler.js`의 카톡 훅(`runKakaoIngest`)은 **절대 reject하지 않는다.** 카톡 단계가 Obsidian 동기화를 막으면 안 된다. `RESULT_JSON.error === 'auth'`면 로그만 남기고 다음 단계로 간다. (지시서 `docs/tasks/2026-09-06-scheduler-kakao-hook.md`)
 - 꿀팁이 신규 추가되면 `sync_obsidian.py`가 **제한 없이** `wiki_ingest.py`를 띄운다(기존 동작). 처음 대량 적재할 때는 `sync_tips()`를 단독 실행한 뒤 `wiki_ingest.py --limit=20`으로 나눠 돌릴 것. 2026-09-06 첫 적재 시 99건이 한꺼번에 들어가 수동 중단했다.
@@ -230,6 +230,49 @@ GCP       : youtube-data-api-487306, 게시 상태 = 프로덕션
 - 재발급 중 `accounts.google.com/info/unknownerror`가 뜨면 다중 로그인 세션 충돌이다. 출력된 URL을 **시크릿 창**에 붙여넣는다.
 - 발급 후 위 §"OAuth 계정 일치 검증"을 먼저 돌린다(1유닛).
 
+**wiki-ingest 의 Gemini 무료 할당량 — 3중 함정 (2026-09-10)**
+
+`wiki_config.py:gemini_call`. 로그 근거: `~/Library/Logs/irichgreen/wiki-ingest.log` WIKI_RESULT 29회 = processed 212 / errors 165(44%).
+오류 내역은 **429 125건(RPD 108 + RPM 17) · 503 39건 · 타임아웃 1건**. 파싱 실패는 0건이다.
+
+- **429 는 두 종류다. `quotaId` 로만 구분된다.** 응답 `error.details[].QuotaFailure.violations[].quotaId` 가
+  `GenerateRequestsPerDayPerProjectPerModel-FreeTier`(quotaValue 20)면 RPD,
+  `GenerateRequestsPerMinutePerProjectPerModel-FreeTier`(quotaValue 5)면 RPM이다.
+  `RetryInfo.retryDelay` 에 권장 대기시간이 같이 온다. **추측으로 분기하지 말 것 — 근거는 응답 안에 있다.**
+  예전 코드는 둘을 구분하지 않고 전부 `dead` 처리해서 분당 한도 한 번에 키 하나를 하루치 통째로 버렸다.
+  지금은 RPM이면 `retryDelay+2`초(상한 65) 대기 후 **같은 키로** 재시도하고, RPD일 때만 dead 처리한다.
+  `quotaId` 가 없으면 `unknown` — 본문 전체를 로그에 남기고 보수적으로 RPD 취급한다.
+- **5xx 는 재시도 대상이다.** 오류 165건 중 39건(24%)이 503인데 예전에는 그대로 올려서 소스가 떨어졌다.
+  지금은 지수 백오프(2→15초 상한, 3회)로 같은 키에 재시도한다. `<urlopen error timed out>` 도 같은 취급.
+  **`scheduler.js` v2.7.1 이 JS 쪽에서 고친 것과 같은 결함이었다. 한쪽만 고치면 다른 쪽이 남는다.**
+- **일 경계는 태평양시다.** `_today()` 가 `time.gmtime(now - 8h)` 를 쓴다. KST 자정 기준으로 세면
+  로컬 카운터만 리셋되고 구글 RPD 는 그대로라, **00시 실행이 매번 '깨끗한 장부'로 시작해 즉시 429 를 맞는다.**
+  `lib/youtube_oauth.js:todayKey()` 와 같은 취지의 교정이다.
+
+**wiki_ingest 실행 경로는 두 개다 (2026-09-10)**
+
+```
+① launchd  com.irichgreen.wiki-ingest         매일 17:30 (= PT 01:30, RPD 리셋 직후)
+② scheduler.js:1464  totalSaved === 0  →  sync_obsidian.py --rebuild
+     └ sync_obsidian.py:516  --rebuild → force=True
+       └ sync_obsidian.py:538  subprocess.run([sys.executable, 'wiki_ingest.py'], capture_output=True)
+```
+
+②는 **저장 0건인 스케줄러 실행마다(00/06/12/18시)** 돈다. 증분 모드라 할 일이 없으면 즉시 끝나고,
+KST 00/06/12 시는 PT 기준 전날 장부·17:30 은 PT 당일 리셋 직후라 서로 할당량을 뺏지 않는다.
+**②를 끄지 말 것 — 의도된 동작이다.**
+
+- ②의 stdout 은 `capture_output=True` 라 예전에는 `ytsummarizer.log` 로 흡수돼
+  `wiki-ingest.log` 에 아무것도 안 남았다. `.wiki_state.json` 의 `last_run` 만 갱신되고 로그는 그대로여서
+  "안 도는 줄" 오판하기 좋았다(2026-09-10 06:01:11 사건).
+  지금은 `sync_obsidian.py:_tee_wiki_log()` 가 캡처한 출력을 `wiki-ingest.log` 에 append 한다.
+  `───── via sync_obsidian.py (subprocess) <ISO시각> ─────` 헤더가 붙고 **`WIKI_RESULT` 줄이 그대로 남는다.**
+  `WIKI_RESULT` 가 유일한 판정 지표이므로 이 tee 를 지우면 ②는 다시 안 보이게 된다.
+- **두 경로의 인터프리터는 같다: `/opt/homebrew/bin/python3`.**
+  plist 의 `ProgramArguments`, `scheduler.js:1454`, `server.js:232` 가 모두 이 경로를 하드코딩하고,
+  `sync_obsidian.py` 는 `sys.executable` 을 물려주므로 ②도 같은 파이썬을 탄다.
+  **셋 중 하나만 바꾸면 라이브러리가 갈린다 — 바꿀 때는 3곳을 함께 고칠 것.**
+
 **Gemini 분류 경로 — 요약 경로와 대응이 달랐던 자리 (v2.7.1)**
 
 - `scheduler.js`의 분류 재시도 catch는 원래 **429/quota만** 재시도했다. 요약 경로(`:459`)는 503에 키 로테이션 + 재시도로 대응하는데 분류만 빠져 있어 **503 한 번에 영상이 떨어졌다**(2026-08-28 06:00 실제 발생). 지금은 `5xx`·`UNAVAILABLE`·`overloaded`·`high demand`도 지수 백오프(2→15초 상한)로 재시도한다. **분류 쪽 재시도 조건을 손댈 때 요약 경로와 대칭인지 먼저 확인할 것.**
@@ -249,7 +292,7 @@ GCP       : youtube-data-api-487306, 게시 상태 = 프로덕션
 |------|-----------|--------|-----------|
 | `com.irichgreen.server` | `server.js` (포트 3000) | `KeepAlive`, `RunAtLoad` — 상주 | `/opt/homebrew/bin/node` |
 | `com.irichgreen.ytsummarizer` | `scheduler.js` | 00 / 06 / 12 / 18시 | `/opt/homebrew/bin/node` |
-| `com.irichgreen.wiki-ingest` | `wiki_ingest.py --full` | 매일 03:00 | `/usr/bin/python3` (시스템 파이썬) |
+| `com.irichgreen.wiki-ingest` | `wiki_ingest.py` (증분) | 매일 17:30 | `/opt/homebrew/bin/python3` |
 
 - **실제 동작하는 plist는 `~/Library/LaunchAgents/`에 있다.** 레포 루트의 plist 3개는 그 원본이며, 2026-08-17부터 3개 모두 실경로(`/Users/tycoonan/Documents/Claude/Projects/Youtube_Notion_Grap`)가 들어 있다. 예전에 `server`·`ytsummarizer` 두 개에 있던 `/Users/사용자명/youtube-notion-app` 플레이스홀더는 제거했다.
 - 각 plist는 `ProgramArguments`·`WorkingDirectory` **2곳에 절대경로**가 박혀 있다. 경로 변경 시 6군데 동기화 + `plutil -lint` + unload/load.
@@ -291,6 +334,7 @@ GCP       : youtube-data-api-487306, 게시 상태 = 프로덕션
 
 ## 변경 이력
 
+- **2026-09-10** — wiki-ingest 429 처리를 RPD/RPM 분기로 교정(`wiki_config.py`). 로그 실측 근거: 오류 165건 = 429 125(RPD 108/RPM 17) + 503 39 + 타임아웃 1, 파싱 실패 0. `quotaId` 로 구분해 RPM 은 `retryDelay` 대기 후 같은 키 재시도, RPD 만 dead 처리(`unknown` 은 본문 전량 로깅 후 보수적 RPD). 5xx·URLError 지수 백오프 추가(24%의 오류가 재시도 없이 버려지던 자리). `_today()` 를 태평양시로 교정. 부수 발견: `scheduler.js:1464` 의 `--rebuild` 경로가 `wiki_ingest.py` 를 `capture_output` 으로 띄워 로그에 안 남는 실행이 하루 최대 4회 있었다. `sync_obsidian.py` 에 `_tee_wiki_log()` 추가 — `--rebuild` 경로로 띄운 wiki_ingest 의 출력(WIKI_RESULT 포함)을 `wiki-ingest.log` 에 append 해 두 실행 경로를 한 로그에서 보게 했다(`--rebuild` 중복 실행 자체는 의도된 동작이라 유지). launchd 표의 wiki-ingest 인터프리터·스케줄 기재를 실제값(`/opt/homebrew/bin/python3`, 17:30, 증분)으로 교정. 검증: `--limit=6` processed 6 / errors 0(429 2건을 키 교체로 흡수), `sync_obsidian.py --rebuild` 후 `wiki-ingest.log` 에 tee 블록·WIKI_RESULT 기록 확인. 백업 `wiki_config.py.bak.20260910`(며칠 관찰 후 삭제).
 - **2026-09-09 (문서)** — 규약 1줄: 문서에 개인 절대경로를 새로 쓰지 않는다(`<REPO_ROOT>`·`~` 표기). 기존 8곳(CLAUDE.md 3 · AGENTS.md 5)은 09-06 push 분이 이미 공개라 소급 정리하지 않는다(사용자 판정).
 - **2026-09-08 (문서)** — `AGENTS.md` git 추적 시작(420줄, 그동안 untracked). 추적 밖이라 diff·리뷰에 안 잡혀 `AGENTS.md:409`가 "README.md + README.html 양쪽 동시 갱신"으로 남아 `CLAUDE.md:284`(v3.0 폐지)와 어긋나 있었다 — 금지 문구로 교체하고 추적 규약을 산출물 규칙에 추가. 코드 무변경.
 - **2026-09-06 (v3.0)** — 메이저 승격: 지식 소스 2원화(YouTube + 카카오톡). `kakao_ingest.py`에 `--if-new`·`.kakao_state.json`·`RESULT_JSON`·`KakaoTalk_Chat_안진훈_` 접두 필터(NFC) 추가. `scheduler.js` 훅 지시서 `docs/tasks/2026-09-06-scheduler-kakao-hook.md`. 생성 경로 검증(테스트 행 생성→아카이브). **`README.html` 삭제·폐지 — 앞으로 만들지 않는다.** README.md v3.0 상세 이력·데이터 흐름도.
