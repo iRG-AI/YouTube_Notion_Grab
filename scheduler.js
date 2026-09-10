@@ -59,6 +59,12 @@ const CONFIG = {
   notionDbId:           process.env.NOTION_DB_ID                || '',
   masterPlaylistId:     process.env.YOUTUBE_MASTER_PLAYLIST_ID  || '',
 
+  // 토픽별 YouTube 재생목록 자동 추가 (2026-09-09 신설 스위치).
+  // 'false' 로 두면 재생목록 추가와 pending 큐 재시도를 모두 건너뛴다.
+  // ★ 요약·Notion 저장·Obsidian 동기화·토픽 분류는 이 값과 무관하게 그대로 동작한다.
+  //   playlists.json 은 분류기의 후보 토픽 목록이므로 비우면 안 된다(주제 분류가 죽는다).
+  playlistSync:         process.env.YOUTUBE_PLAYLIST_SYNC !== 'false',
+
   telegram: {
     enabled:  process.env.TELEGRAM_ENABLED === 'true',
     botToken: process.env.TELEGRAM_BOT_TOKEN || '',
@@ -790,6 +796,10 @@ async function saveToNotionWithTopics(v, summary, topics) {
 // ── pending_playlist_adds.json 큐 소진 ──
 // 매 실행 시 quota 여유분 내에서 미처리 YouTube 재생목록 추가를 처리합니다.
 async function flushPendingQueue() {
+  if (!CONFIG.playlistSync) {
+    log('⏭  재생목록 동기화 꺼짐(YOUTUBE_PLAYLIST_SYNC=false) — pending 큐 재시도 건너뜀');
+    return;
+  }
   const PENDING_PATH = path.join(__dirname, 'pending_playlist_adds.json');
   let queue = [];
   try { queue = JSON.parse(fs.readFileSync(PENDING_PATH, 'utf-8')); } catch { return; }
@@ -1054,8 +1064,8 @@ async function processMasterIngest(notionCache) {
           topicStats[t] = (topicStats[t] || 0) + 1;
         }
 
-        // YouTube 토픽 재생목록에 추가 (신뢰도 0.6+)
-        if (cls.confidence >= 0.6 && topics.length > 0) {
+        // YouTube 토픽 재생목록에 추가 (신뢰도 0.6+, playlistSync 켜진 경우만)
+        if (CONFIG.playlistSync && cls.confidence >= 0.6 && topics.length > 0) {
           // pending 큐 헬퍼 (migrate_classify.js와 동일한 파일 공유)
           const PENDING_PATH = path.join(__dirname, 'pending_playlist_adds.json');
           const appendPending = (entry) => {

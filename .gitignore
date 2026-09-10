@@ -39,5 +39,7 @@ __pycache__/
 KakaoTalk_Chat_*
 
 # 백업본·로테이션 로그 (2026-09-10) — `.wiki_quota.json` 등 상태 파일 패턴이 .bak 접미사를 못 잡는다
+# *.log.[0-9]* 는 로테이션분(scheduler.log.1.gz)만 노린다. *.log.* 는 .log. 를 품은
+# 평범한 소스·문서까지 삼킬 수 있어 일부러 좁혔다.
 *.bak.*
-*.log.*
+*.log.[0-9]*
