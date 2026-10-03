@@ -284,6 +284,8 @@ KST 00/06/12 시는 PT 기준 전날 장부·17:30 은 PT 당일 리셋 직후�
 
 **토픽 추가 시**: `playlists.json`에 새 항목 추가 + `build_obsidian_wiki.py`의 `VALID_NOTION_TAGS` 동기화 필수.
 
+**Vault 경로 중첩 (2026-09-19)**: 실제 Vault는 `~/Documents/Obsidian/AI LLM Wiki/AI LLM Wiki` (바깥 `AI LLM Wiki/`는 빈 껍데기, `README-여기가-아님.txt` 있음). 동작에 문제 없음. 이 경로는 `sync_obsidian.py`·`build_obsidian_wiki.py`·`wiki_config.py`·`lib/wiki_search.js`·`cleanup_duplicates.py`·`notion_to_obsidian.js` 6곳 + `legacy_scripts/` 2곳 + Obsidian 앱 등록에 박혀 있다. **v3.1(2nd_Brain 2단계 — `build_search_index.py`에 `_Brain/` 포함)과 같은 작업지시서로 한 단계 승격한다. 그 전에 옮기지 말 것.** 절차: 데몬 3종 stop → `mv` → 8파일 치환 → Obsidian 재등록 → `--orphans-dry-run --no-tips`로 "notion_id 2,542·고아 0" 확인 → 인덱스 재빌드 → 재기동.
+
 **server.js 보안**: Notion API 프록시는 `ALLOWED_NOTION_PATHS` 화이트리스트만 통과. CORS는 `localhost:3000`만 허용. IP당 분당 120요청 rate limit.
 
 ### launchd 데몬 3종
