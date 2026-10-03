@@ -1,6 +1,6 @@
 # 🎬 YouTube + 📎 카카오톡 → Notion → Obsidian LLM Wiki
 
-**현재 버전: v3.1** (2026-09-10)
+**현재 버전: v3.2** (2026-10-03)
 
 YouTube 재생목록의 영상을 **Gemini AI**로 자동 요약하고, 카카오톡 '나와의 채팅'에 저장해 둔 **AI 자료 링크**를 자동 수집하여
 각각 **Notion DB**(영상 DB ·「AI 꿀팁」DB)에 적재한 뒤, **Obsidian**으로 동기화해 하나의 **LLM Wiki** 지식베이스로 합성하는 자동화 파이프라인입니다.
@@ -141,6 +141,10 @@ Youtube_Notion_Grap/
 ├── migrate_classify.js                # 기존 영상 일괄 재분류 스크립트 (v102)
 ├── oauth_setup.js                     # YouTube OAuth refresh_token 1회 발급 도구 (v102)
 ├── notion_to_obsidian.js              # Notion → Obsidian 일회성 마이그레이션
+├── wiki_lan_server.js                 # (v3.2) 집 안 전용 읽기 전용 Wiki 검색 서버 (포트 3100, 허용 대역 + 루프백만)
+├── wiki.html                          # Wiki 검색 화면 (server.js·wiki_lan_server.js 공용)
+├── wiki_mcp.js                        # Wiki 검색 stdio MCP (search_wiki, read_note)
+├── build_search_index.py              # 검색 인덱스(임베딩) 증분 빌드
 ├── kakao_ingest.py                    # (v3.0) 카톡 CSV → Notion「AI 꿀팁」 (기본 dry-run, --apply / --if-new)
 ├── sync_obsidian.py                   # Obsidian 증분 동기화 (영상 노트 + 꿀팁 노트, 고아 격리, 위키 인제스트 연동)
 ├── wiki_ingest.py                     # Gemini 기반 엔티티/개념 위키 페이지 합성 스크립트 (v111)
@@ -150,11 +154,13 @@ Youtube_Notion_Grap/
 ├── com.irichgreen.server.plist        # launchd 서버 자동시작 설정
 ├── com.irichgreen.ytsummarizer.plist  # launchd 스케줄러 설정
 ├── com.irichgreen.wiki-ingest.plist   # launchd 일일 Wiki 인제스트 스케줄러 (v111)
+├── com.irichgreen.wiki-lan.plist      # (v3.2) launchd 집 안 전용 검색 서버 (상주, ThrottleInterval 60)
 ├── install-server.sh                  # 서버 자동시작 설치 스크립트
 ├── install-scheduler.sh               # 스케줄러 설치 스크립트
 ├── install-wiki-ingest.sh             # 일일 Wiki 인제스트 스케줄러 설치 스크립트 (v111)
 ├── lib/
 │   ├── youtube_oauth.js               # YouTube OAuth 2.0 + playlistItems.insert (v102)
+│   ├── wiki_search.js                 # Wiki 검색 코어 (임베딩 코사인 + 키워드 폴백 + Gemini 401/403 래치)
 │   ├── classifier.js                  # Gemini 기반 토픽 분류기 (v102)
 │   ├── kakao_parse.py                 # (v3.0) URL 추출·정규화·중복 키·제목/카테고리 추정 (순수 함수)
 │   └── tips_notion.py                 # (v3.0) 「AI 꿀팁」DB 조회/생성 래퍼 (속성 타입 표 고정)
@@ -196,6 +202,10 @@ NOTION_DB_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx        # YouTube 영상 DB
 # (v3.0) 카카오톡 →「AI 꿀팁」 — NOTION_DB_ID 와 반드시 다른 변수명. 섞으면 영상 파이프라인이 엉뚱한 DB에 쓴다
 NOTION_TIPS_DB_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx   # 「AI 꿀팁」DB (같은 NOTION_TOKEN 통합에 연결 필요)
 KAKAO_EXPORT_DIR=/Users/<사용자>/Downloads          # KakaoTalk_Chat_안진훈_*.csv 가 떨어지는 폴더
+
+# (v3.2) 집 안 전용 Wiki 검색 서버 — 이 대역 + 루프백만 접속 허용. 없거나 틀리면 127.0.0.1 전용(fail-closed)
+WIKI_LAN_ALLOW_CIDR=192.168.0.0/24                  # 예시값 — 실제 집 네트워크 대역으로 교체
+WIKI_LAN_ASK_DAILY_MAX=20                           # AI 답변 24시간 총량 (Gemini 무료 한도 보호)
 
 TELEGRAM_ENABLED=true
 TELEGRAM_BOT_TOKEN=1234567890:AAG...
@@ -246,6 +256,21 @@ bash install-scheduler.sh
 ```
 
 > 인터프리터는 `/usr/bin/python3` 또는 `/opt/homebrew/bin/python3`. PATH 의 `python3`(python.org 3.11)는 루트 인증서가 없어 Notion 호출이 SSL 오류로 죽는다.
+
+### 4. Wiki 검색 (v3.2)
+
+| 입구 | 프로세스 | 바인딩 | 용도 |
+|---|---|---|---|
+| `http://localhost:3000/wiki` | `server.js` | `127.0.0.1:3000` | 이 맥에서 직접 |
+| `http://<맥이름>.local:3100/wiki` | `wiki_lan_server.js` | `0.0.0.0:3100` + 대역 필터 | 집 안 다른 컴퓨터(가족) |
+| MCP `wiki-search` | `wiki_mcp.js` (stdio) | 없음 | Claude 대화 중 |
+
+가족 공유 켜는 순서:
+1. `.env` 에 `WIKI_LAN_ALLOW_CIDR`(집 네트워크 대역)·`WIKI_LAN_ASK_DAILY_MAX` 추가
+2. `cp com.irichgreen.wiki-lan.plist ~/Library/LaunchAgents/ && launchctl load ~/Library/LaunchAgents/com.irichgreen.wiki-lan.plist`
+3. macOS 방화벽에서 `node` 수신 연결 허용 (관리자 권한 필요 — 사람이 직접)
+
+> 제약: 맥이 집에 켜져 있고 깨어 있을 때만 접속된다. 읽기 전용(검색·AI 답변)이며, Notion 쓰기·인제스트 실행 엔드포인트는 이 서버에 없다.
 
 ---
 
@@ -298,6 +323,7 @@ bash install-scheduler.sh
 
 | 버전 | 날짜 | 주요 내용 요약 |
 | :-- | :--- | :--- |
+| **v3.2** | 2026-10-03 | **집 안 전용 Wiki 검색 서버**: 가족이 같은 네트워크의 다른 컴퓨터에서 `http://<맥이름>.local:3100/wiki`로 검색하도록 읽기 전용 서버 `wiki_lan_server.js` 신설. `server.js`(Notion 쓰기 프록시·인제스트 실행 포함)는 `127.0.0.1` 전용으로 유지하고 검색 경로만 분리 노출. 허용 대역(`WIKI_LAN_ALLOW_CIDR`) 밖 403, 미설정 시 루프백 전용(fail-closed), Host 검사, AI 답변 일일 총량으로 Gemini 무료 한도 보호. `launchd` `com.irichgreen.wiki-lan` 추가 |
 | **v3.1** | 2026-09-10 | **Wiki 인제스트 할당량 소모 구조 교정**: Gemini 429를 `quotaId`로 RPD/RPM 분기(분당 한도 한 번에 키를 하루치 폐기하던 손실 제거), 5xx·네트워크 오류 지수 백오프 추가(전체 오류의 24%가 재시도 없이 버려지던 자리), 무료 티어 일 경계를 태평양시로 교정. `--rebuild` 경로로 띄운 wiki_ingest 의 출력을 `wiki-ingest.log` 에 합류시켜 실행 경로 2개를 한 로그에서 판정 가능하게 함 |
 | **v3.0** | 2026-09-06 | **지식 소스 2원화 — 카카오톡 링크 파이프라인 통합**: 카카오톡 '나와의 채팅' CSV → Notion「AI 꿀팁」DB → Obsidian `AI 꿀팁/` 노트 → 기존 Wiki 합성·MOC 를 그대로 공유. `kakao_ingest.py`·`lib/kakao_parse.py`·`lib/tips_notion.py` 신규, `sync_obsidian.py:sync_tips()`, `scheduler.js` 훅(`--apply --if-new`), 텔레그램 통합 알림. 영상 노트와 꿀팁 노트의 격리 원칙 확립. `README.html` 폐지 |
 | **v2.7.1** | 2026-08-28 | **토픽 분류의 일시적 서버 오류(5xx) 재시도 추가**: 요약 경로는 503에 키 로테이션 + 재시도로 대응하는 반면 분류 경로는 429/quota만 재시도 대상이라 503 한 번에 영상이 떨어지던 비대칭을 교정하고, 재시도 소진 시 발생하던 잠복 TypeError 경로를 차단 |
@@ -316,6 +342,23 @@ bash install-scheduler.sh
 ---
 
 ### 📝 상세 변경 내역 (Detailed Change Log)
+
+#### [v3.2] — 2026-10-03 (🏠 집 안 전용 Wiki 검색 서버)
+
+**배경.** Wiki 검색 화면은 `server.js`(포트 3000)가 서빙하는데 이 서버는 `127.0.0.1` 에만 바인딩한다. 집 안의 다른 컴퓨터(가족)에서는 접속할 수 없었다.
+
+**분리 이유.** `server.js` 를 `0.0.0.0` 으로 열면 같은 서버의 Notion 쓰기 프록시, `POST /api/master-ingest`(YouTube quota 소모), `POST /api/sync-obsidian`(Vault 동기화·고아 격리), `GET /api/config` 가 집 네트워크에 함께 노출된다. 그래서 검색만 하는 읽기 전용 서버를 따로 두고, 검색 엔진(`lib/wiki_search.js`)과 화면(`wiki.html`)은 공유한다. `server.js`·`lib/wiki_search.js`·`wiki_mcp.js`·`scheduler.js` 는 수정하지 않았다.
+
+**안전장치.**
+- 라우트는 `/`, `/wiki`, `/favicon.svg`, `/api/wiki-topics`, `/api/wiki-search`, `/api/wiki-ask` 6개뿐, 나머지는 404
+- `WIKI_LAN_ALLOW_CIDR`(사설 대역 `/16`~`/32`) + 루프백만 허용. 미설정·형식 오류면 `127.0.0.1` 전용(fail-closed, 프로세스는 죽지 않아 launchd 재시작 루프 없음)
+- 클라이언트 IP 는 소켓 주소만 신뢰(`X-Forwarded-For` 무시), `Host` 검사(DNS 리바인딩 차단), AI 답변 타 출처(`Origin`) 거부
+- IP당 분당 60요청, AI 답변은 IP당 분당 5회 + 24시간 총량 `WIKI_LAN_ASK_DAILY_MAX`(기본 20) — scheduler·wiki-ingest 와 같은 Gemini 무료 키를 쓰므로 한도 보호
+- 로그는 기동·차단·오류만, 검색어는 기록하지 않음
+- `wiki.html` 에 `IS_LOCAL` 추가 — Vault 가 없는 가족 PC 에서는 「Obsidian에서 열기」 링크를 숨김
+- `com.irichgreen.wiki-lan.plist`: `KeepAlive` + `ThrottleInterval 60`(포트 충돌 시 오류 로그 폭증 방지)
+
+**검증.** 바인딩 `*:3100` / 기존 `127.0.0.1:3000` 분리 유지, `server.js` 전용 경로 6종(`/api/master-ingest`·`/api/sync-obsidian`·`/api/config`·`/v1/pages`·`/index.html`·`/.env`) 전부 404, 위조 `Host`·타 출처 `Origin` 403, 벡터 검색 정상, AI 답변 정상 1회, LAN 주소·`.local` 이름 접속 200. 방화벽 수신 허용(관리자 권한)과 가족 PC 실접속 확인은 사용자가 별도로 수행한다.
 
 #### [v3.1] — 2026-09-10 (🔑 Wiki 인제스트 할당량 소모 구조 교정)
 

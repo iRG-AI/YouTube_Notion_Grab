@@ -98,6 +98,8 @@
 <script>
 const $ = id => document.getElementById(id);
 const esc = s => (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+// Obsidian 링크는 Vault 가 있는 이 맥에서만 의미가 있다. 가족 PC(집 안 전용 서버 접속)에서는 숨긴다.
+const IS_LOCAL = ['localhost', '127.0.0.1'].includes(location.hostname);
 
 function fill(text) { $('q').value = text; doSearch(); }
 $('q').addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
@@ -145,7 +147,7 @@ function renderResults(results, mode) {
       <div class="snippet">${esc(r.snippet)}</div>
       <div class="links">
         ${hasVideo ? `<a href="${esc(r.video_url)}" target="_blank">▶ YouTube</a>` : ''}
-        <a href="${obsUrl}">📓 Obsidian에서 열기</a>
+        ${IS_LOCAL ? `<a href="${obsUrl}">📓 Obsidian에서 열기</a>` : ''}
       </div>
       </div>
     </div>`;

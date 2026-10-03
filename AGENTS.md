@@ -209,13 +209,14 @@ GCP       : youtube-data-api-487306, 게시 상태 = 프로덕션
 
 **server.js 보안**: Notion API 프록시는 `ALLOWED_NOTION_PATHS` 화이트리스트만 통과. CORS는 `localhost:3000`만 허용. IP당 분당 120요청 rate limit.
 
-### launchd 데몬 3종
+### launchd 데몬
 
 | 라벨 | 실행 대상 | 스케줄 | 인터프리터 |
 |------|-----------|--------|-----------|
 | `com.irichgreen.server` | `server.js` (포트 3000) | `KeepAlive`, `RunAtLoad` — 상주 | `/opt/homebrew/bin/node` |
 | `com.irichgreen.ytsummarizer` | `scheduler.js` | 00 / 06 / 12 / 18시 | `/opt/homebrew/bin/node` |
-| `com.irichgreen.wiki-ingest` | `wiki_ingest.py --full` | 매일 03:00 | `/usr/bin/python3` (시스템 파이썬) |
+| `com.irichgreen.wiki-ingest` | `wiki_ingest.py` (증분) | 매일 17:30 | `/opt/homebrew/bin/python3` |
+| `com.irichgreen.wiki-lan` | `wiki_lan_server.js` (포트 3100) | `KeepAlive`, `RunAtLoad`, `ThrottleInterval 60` — 상주 | `/opt/homebrew/bin/node` |
 
 - **실제 동작하는 plist는 `~/Library/LaunchAgents/`에 있다.** 레포 루트의 plist 3개는 그 원본이며, 2026-08-17부터 3개 모두 실경로(`/Users/tycoonan/Documents/Codex/Projects/Youtube_Notion_Grap`)가 들어 있다. 예전에 `server`·`ytsummarizer` 두 개에 있던 `/Users/사용자명/youtube-notion-app` 플레이스홀더는 제거했다.
 - 각 plist는 `ProgramArguments`·`WorkingDirectory` **2곳에 절대경로**가 박혀 있다. 경로 변경 시 6군데 동기화 + `plutil -lint` + unload/load.
@@ -291,13 +292,14 @@ Node.js(수집·분류·서버) + Python(Obsidian 동기화·Wiki 합성) 혼합
 
 ## 🚨 상시 주의사항
 
-### launchd 데몬 3종
+### launchd 데몬
 
-| 라벨 | 실행 대상 | 스케줄 |
-|---|---|---|
-| `com.irichgreen.server` | `server.js` (포트 3000) | `KeepAlive`, `RunAtLoad` — 상주 |
-| `com.irichgreen.ytsummarizer` | `scheduler.js` | 00 / 06 / 12 / 18시 |
-| `com.irichgreen.wiki-ingest` | `wiki_ingest.py --full` | 매일 03:00 |
+| 라벨 | 실행 대상 | 스케줄 | 인터프리터 |
+|------|-----------|--------|-----------|
+| `com.irichgreen.server` | `server.js` (포트 3000) | `KeepAlive`, `RunAtLoad` — 상주 | `/opt/homebrew/bin/node` |
+| `com.irichgreen.ytsummarizer` | `scheduler.js` | 00 / 06 / 12 / 18시 | `/opt/homebrew/bin/node` |
+| `com.irichgreen.wiki-ingest` | `wiki_ingest.py` (증분) | 매일 17:30 | `/opt/homebrew/bin/python3` |
+| `com.irichgreen.wiki-lan` | `wiki_lan_server.js` (포트 3100) | `KeepAlive`, `RunAtLoad`, `ThrottleInterval 60` — 상주 | `/opt/homebrew/bin/node` |
 
 - plist는 `~/Library/LaunchAgents/`. 각각 `ProgramArguments`·`WorkingDirectory`
   **2곳에 절대경로**가 박혀 있다. 경로를 바꾸면 6군데 동기화 + `plutil -lint` + unload/load.
