@@ -304,7 +304,7 @@ Node.js(수집·분류·서버) + Python(Obsidian 동기화·Wiki 합성) 혼합
 - plist는 `~/Library/LaunchAgents/`. 각각 `ProgramArguments`·`WorkingDirectory`
   **2곳에 절대경로**가 박혀 있다. 경로를 바꾸면 6군데 동기화 + `plutil -lint` + unload/load.
 - `com.irichgreen.server`는 상주 프로세스라 **코드를 고쳐도 재기동 전까지 반영되지 않는다.**
-- `wiki-ingest`만 **`/usr/bin/python3`(시스템 파이썬)**, Node는 `/opt/homebrew/bin/node`.
+- 인터프리터는 위 표가 원본이다. Node 데몬은 `/opt/homebrew/bin/node`, `wiki-ingest`는 `/opt/homebrew/bin/python3`(2026-09-10부터. 예전의 `/usr/bin/python3`가 아니다).
 - **`brew upgrade` 후에는 상주 데몬을 반드시 재기동한다.** 데몬은 기동 시점의 Cellar
   경로를 물고 도는데, 업그레이드로 그 폴더가 삭제되면 이후 지연 import가 전부 실패한다.
   이미 로드된 모듈은 멀쩡히 동작해 **부분 실패로 나타나므로 알아채기 어렵다.**

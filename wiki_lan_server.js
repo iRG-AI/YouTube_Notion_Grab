@@ -23,6 +23,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const net = require('net');
+const { execFileSync } = require('child_process');
 const wikiSearch = require('./lib/wiki_search');   // .env 는 이 모듈이 process.env 로 올린다
 
 const PORT = Number(process.env.WIKI_LAN_PORT) || 3100;
@@ -71,6 +72,16 @@ try {
   CIDRS = [];
 }
 const HOST = CIDRS.length ? '0.0.0.0' : '127.0.0.1';
+
+// 가족이 쓰는 Bonjour(.local) 이름은 LocalHostName 이다. os.hostname() 은 다른 값일 수 있다
+// (2026-10-03 실측: os.hostname() 이 준 이름은 .local 로 풀리지 않았다). 기동 로그 표시용.
+function bonjourName() {
+  try {
+    const name = execFileSync('/usr/sbin/scutil', ['--get', 'LocalHostName'], { encoding: 'utf8', timeout: 3000 }).trim();
+    if (name) return name;
+  } catch (e) { /* scutil 실패 → 아래 대체값 */ }
+  return os.hostname().replace(/\.local$/i, '');
+}
 
 function clientIp(req) {
   const a = req.socket.remoteAddress || '';
@@ -253,7 +264,7 @@ server.listen(PORT, HOST, () => {
   if (CIDRS.length) {
     console.log(`  바인딩: ${HOST}:${PORT}`);
     console.log(`  허용 대역: ${CIDRS.map(c => c.label).join(', ')} + 루프백`);
-    console.log(`  가족 접속: http://${os.hostname().replace(/\.local$/i, '')}.local:${PORT}/wiki`);
+    console.log(`  가족 접속: http://${bonjourName()}.local:${PORT}/wiki`);
   } else {
     console.log(`  바인딩: ${HOST}:${PORT} — WIKI_LAN_ALLOW_CIDR 미설정. 이 맥에서만 접속됩니다.`);
   }

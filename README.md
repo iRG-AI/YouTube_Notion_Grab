@@ -357,6 +357,7 @@ bash install-scheduler.sh
 - 로그는 기동·차단·오류만, 검색어는 기록하지 않음
 - `wiki.html` 에 `IS_LOCAL` 추가 — Vault 가 없는 가족 PC 에서는 「Obsidian에서 열기」 링크를 숨김
 - `com.irichgreen.wiki-lan.plist`: `KeepAlive` + `ThrottleInterval 60`(포트 충돌 시 오류 로그 폭증 방지)
+- 기동 로그의 `가족 접속:` 주소는 `scutil --get LocalHostName` 기준 — `os.hostname()`은 `.local`로 풀리지 않는 이름을 줄 수 있다
 
 **검증.** 바인딩 `*:3100` / 기존 `127.0.0.1:3000` 분리 유지, `server.js` 전용 경로 6종(`/api/master-ingest`·`/api/sync-obsidian`·`/api/config`·`/v1/pages`·`/index.html`·`/.env`) 전부 404, 위조 `Host`·타 출처 `Origin` 403, 벡터 검색 정상, AI 답변 정상 1회, LAN 주소·`.local` 이름 접속 200. 방화벽 수신 허용(관리자 권한)과 가족 PC 실접속 확인은 사용자가 별도로 수행한다.
 
